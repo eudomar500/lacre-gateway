@@ -1,0 +1,67 @@
+# systemd unit for the Lacre gateway.
+#
+# Install:
+#   useradd --system --home /opt/lacre-gateway --shell /usr/sbin/nologin lacre
+#   install -d -m 0750 -o root -g lacre /etc/lacre-gateway
+#   install -m 0640 -o root -g lacre deploy/gateway.env.example /etc/lacre-gateway/gateway.env
+#   install -m 0600 -o root -g root /dev/null /etc/lacre-gateway/signing.key
+#   (write the key into signing.key with an editor as root; see README, Deploy)
+#   cp deploy/lacre-gateway.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now lacre-gateway
+#
+# The signing key lives in /etc/lacre-gateway/signing.key, owned by root,
+# mode 600. The service user cannot read that file. LoadCredential makes
+# systemd copy it, at start, into a private per-service credentials
+# directory readable by this service alone, and the gateway reads it from
+# there (%d below). It is never in an Environment= line, never in
+# gateway.env, never in the repository and never in the environment of an
+# interactive shell.
+
+[Unit]
+Description=Lacre gateway (attests email through the Lacre contracts)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=lacre
+Group=lacre
+WorkingDirectory=/opt/lacre-gateway
+EnvironmentFile=/etc/lacre-gateway/gateway.env
+LoadCredential=signing.key:/etc/lacre-gateway/signing.key
+Environment=LACRE_SIGNING_KEY_FILE=%d/signing.key
+Environment=LACRE_DATA_DIR=/var/lib/lacre-gateway
+Environment=LACRE_LISTEN_HOST=127.0.0.1
+Environment=LACRE_LISTEN_PORT=8080
+# The public tools read PROBE_PK; the gateway never does, and it must not
+# inherit one by accident.
+UnsetEnvironment=PROBE_PK
+ExecStart=/opt/lacre-gateway/.venv/bin/python -m lacre_gateway
+Restart=on-failure
+RestartSec=10
+
+StateDirectory=lacre-gateway
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

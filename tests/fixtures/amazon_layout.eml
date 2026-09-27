@@ -1,0 +1,75 @@
+Return-Path: <0100000000000000-aaaaaaaa-0000-0000-0000-000000000000-000000@bounces.example.org>
+Delivered-To: customer@example.org
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id 0000000000000;
+        Sun, 20 Sep 2026 05:12:03 -0700 (PDT)
+X-Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id 0000000000000;
+        Sun, 20 Sep 2026 05:12:03 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1790251923; cv=none;
+        d=example.net; s=arc-20240605;
+        b=AAAAARCSEALPLACEHOLDERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=example.net; s=arc-20240605;
+        h=feedback-id:mime-version:subject:message-id:to:reply-to:from:date
+         :dkim-signature:dkim-signature;
+        bh=3MPz7QqQ4BOjZ3ffGXvX5Fdy/LKpjJKt1KvtUX6bFb4=;
+        b=AAAAARCMSGPLACEHOLDERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+ARC-Authentication-Results: i=1; mx.example.net;
+       dkim=pass header.i=@amazon.com header.s=synthsel2026a header.b=AAAAAAAA;
+       dkim=pass header.i=@amazonses.com header.s=synthsel2026b header.b=BBBBBBBB;
+       spf=pass smtp.mailfrom=bounces.example.org;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=amazon.com
+Received: from a8-1.smtp-out.example.org (a8-1.smtp-out.example.org. [192.0.2.1])
+        by mx.example.net with ESMTPS id 0000000000000
+        for <customer@example.org>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Sun, 20 Sep 2026 05:12:03 -0700 (PDT)
+Received-SPF: pass (mx.example.net: domain of bounces.example.org designates 192.0.2.1 as permitted sender) client-ip=192.0.2.1;
+Authentication-Results: mx.example.net;
+       dkim=pass header.i=@amazon.com header.s=synthsel2026a header.b=AAAAAAAA;
+       dkim=pass header.i=@amazonses.com header.s=synthsel2026b header.b=BBBBBBBB;
+       spf=pass smtp.mailfrom=bounces.example.org;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=amazon.com
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=synthsel2026a; d=amazon.com; t=1790251922;
+	h=Date:From:Reply-To:To:Message-ID:Subject:MIME-Version:Content-Type;
+	bh=3MPz7QqQ4BOjZ3ffGXvX5Fdy/LKpjJKt1KvtUX6bFb4=;
+	b=SIGNATUREPLACEHOLDERAMAZONCOM
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=synthsel2026b; d=amazonses.com; t=1790251922;
+	h=Date:From:Reply-To:To:Message-ID:Subject:MIME-Version:Content-Type:Feedback-ID;
+	bh=3MPz7QqQ4BOjZ3ffGXvX5Fdy/LKpjJKt1KvtUX6bFb4=;
+	b=SIGNATUREPLACEHOLDERAMAZONSES
+Date: Sun, 20 Sep 2026 12:12:02 +0000
+From: "Amazon.com" <auto-confirm@amazon.com>
+Reply-To: no-reply@example.org
+To: customer@example.org
+Message-ID: <0100000000000000-aaaaaaaa-0000-0000-0000-000000000000-000000@email.example.org>
+Subject: Your Amazon.com order #000-0000000-0000000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; 
+	boundary="----=_Part_000_1111.2222"
+X-AMAZON-MAIL-RELAY-TYPE: notification
+Bounces-to: 0100000000000000-aaaaaaaa@bounces.example.org
+X-AMAZON-RTE-VERSION: 2.0
+X-AMAZON-METADATA: CA=C0000000000000-CU=A0000000000000
+X-Original-MessageID: <urn.rtn.msg.00000000000000000000000000000000@1790251922000.rtn-svc-na-00000.us-east-1.example.org>
+Feedback-ID: ::1.us-east-1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:AmazonSES
+X-SES-Outgoing: 2026.09.20-192.0.2.1
+
+------=_Part_000_1111.2222
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+Hello,
+
+Thank you for your order. We will send a confirmation when your item ships.
+
+Order #000-0000000-0000000
+Arriving: Thursday, October 1
+
+------=_Part_000_1111.2222
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Thank you for your order.</p><p>Order #000-0000000-0000000</p></body></html>
+
+------=_Part_000_1111.2222--

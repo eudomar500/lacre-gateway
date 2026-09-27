@@ -1,0 +1,23 @@
+# /etc/cloudflared/config.yml on the VPS.
+#
+# The gateway listens on 127.0.0.1:8080 only; this tunnel is the one way in.
+# Create the tunnel and its DNS route once:
+#   cloudflared tunnel create lacre-gateway
+#   cloudflared tunnel route dns lacre-gateway lacre.in-sidr.xyz
+# then put the tunnel id below and run cloudflared as its own service:
+#   cloudflared service install
+
+tunnel: <TUNNEL-ID>
+credentials-file: /etc/cloudflared/<TUNNEL-ID>.json
+
+ingress:
+  # The signed headers of calls in flight. No API key: the validators fetch
+  # them from the URL in the attest calldata.
+  - hostname: lacre.in-sidr.xyz
+    path: ^/h/[A-Za-z0-9_-]{43}$
+    service: http://127.0.0.1:8080
+  # The API. Every call carries X-API-Key; the gateway checks it.
+  - hostname: lacre.in-sidr.xyz
+    path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|senders/[^/]+/[^/]+|health)$
+    service: http://127.0.0.1:8080
+  - service: http_status:404

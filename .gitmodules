@@ -1,0 +1,3 @@
+[submodule "vendor/lacre"]
+	path = vendor/lacre
+	url = https://github.com/eudomar500/lacre.git

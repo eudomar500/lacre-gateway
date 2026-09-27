@@ -1,0 +1,19 @@
+{
+ "id": "0",
+ "domain": "amazon.com",
+ "selector": "sel1",
+ "bh": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+ "body_canon": "simple",
+ "message_id_sha256": "9f0d5c1e2b3a4f5e6d7c8b9a0f1e2d3c4b5a69788796a5b4c3d2e1f00112233",
+ "key_bits": "1024",
+ "key_sha256": "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
+ "valid": true,
+ "reason": "header signature verified",
+ "from_domain": "amazon.com",
+ "aligned": true,
+ "signed_at": "1790000000",
+ "source": "inline",
+ "requester": "0xF27E3A6d7Bf4BfC0A837020FD74E73055aF17D53",
+ "attested_at": "2026-09-24T12:00:00+00:00",
+ "fee_paid": "0"
+}
