@@ -267,14 +267,60 @@ def test_headers_are_served_only_while_the_call_is_in_flight(api):
 
 # ---- no key material -----------------------------------------------------------
 
-def test_the_signing_key_file_must_be_owner_only_and_never_echoed(tmp_path):
+@pytest.mark.parametrize("mode", [0o600, 0o400])
+def test_an_owner_only_signing_key_file_loads(tmp_path, mode):
+    path = tmp_path / "signing.key"
+    path.write_text("0x" + secrets.token_hex(32) + "\n")
+    os.chmod(path, mode)
+    account = load_account(path)
+    assert account.address.startswith("0x")
+
+
+@pytest.mark.parametrize("mode", [0o640, 0o644])
+def test_a_signing_key_file_readable_by_group_or_others_is_rejected(tmp_path, mode):
     secret = "0x" + secrets.token_hex(32)
     path = tmp_path / "signing.key"
     path.write_text(secret + "\n")
-    os.chmod(path, 0o644)
+    os.chmod(path, mode)
     with pytest.raises(PermissionError) as error:
         load_account(path)
+    assert "owner only" in str(error.value)
     assert secret not in str(error.value)
+
+
+def test_a_0440_key_file_inside_the_credentials_directory_loads(tmp_path, monkeypatch):
+    # systemd LoadCredential with User= hands the key over as 440.
+    credentials = tmp_path / "credentials"
+    credentials.mkdir()
+    path = credentials / "signing.key"
+    path.write_text("0x" + secrets.token_hex(32) + "\n")
+    os.chmod(path, 0o440)
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(credentials))
+    account = load_account(path)
+    assert account.address.startswith("0x")
+
+
+@pytest.mark.parametrize("mode", [0o440, 0o640])
+def test_a_group_readable_key_file_outside_the_credentials_directory_is_rejected(
+        tmp_path, monkeypatch, mode):
+    credentials = tmp_path / "credentials"
+    credentials.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    secret = "0x" + secrets.token_hex(32)
+    path = elsewhere / "signing.key"
+    path.write_text(secret + "\n")
+    os.chmod(path, mode)
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(credentials))
+    with pytest.raises(PermissionError) as error:
+        load_account(path)
+    assert "owner only" in str(error.value)
+    assert secret not in str(error.value)
+
+
+def test_the_signing_key_file_must_hold_a_key_and_is_never_echoed(tmp_path):
+    secret = "0x" + secrets.token_hex(32)
+    path = tmp_path / "signing.key"
     path.write_text("not a key " + secret[:20])
     os.chmod(path, 0o600)
     with pytest.raises(ValueError) as error:

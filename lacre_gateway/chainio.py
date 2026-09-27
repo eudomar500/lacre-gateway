@@ -36,14 +36,22 @@ Stop = attest.Stop
 def load_account(path):
     """The signing account from a key file; the key text is not kept.
 
-    The file must not be readable by group or others. Error messages never
+    Outside the systemd credentials directory the file must carry no group
+    or other permission bits, so 600 and 400 pass. Error messages never
     carry any of its content.
     """
     from genlayer_py import create_account
 
-    info = os.stat(path)
-    if info.st_mode & 0o077:
-        raise PermissionError("the signing key file must be mode 600 (owner only)")
+    # systemd LoadCredential with User= hands the key over as mode 440 and
+    # grants the service user read through an ACL, so the group bits are set
+    # although no group member can reach it: $CREDENTIALS_DIRECTORY is
+    # private to the service and managed by systemd. Only there are the
+    # mode bits not checked; every other path keeps the owner only rule.
+    if not _in_credentials_directory(path):
+        info = os.stat(path)
+        if info.st_mode & 0o077:
+            raise PermissionError("the signing key file must be owner only (mode 600 or 400), "
+                                  "with no group or other access")
     with open(path, "r", encoding="ascii") as handle:
         text = handle.read().strip()
     if not KEY.match(text):
@@ -53,6 +61,20 @@ def load_account(path):
         return create_account(text)
     finally:
         text = None
+
+
+def _in_credentials_directory(path):
+    """True when path resolves to a file inside $CREDENTIALS_DIRECTORY.
+
+    Both sides are resolved first, so a symlink or .. that leads out of the
+    directory does not count as inside it.
+    """
+    directory = os.environ.get("CREDENTIALS_DIRECTORY")
+    if not directory:
+        return False
+    directory = os.path.realpath(directory)
+    target = os.path.realpath(path)
+    return target != directory and os.path.commonpath([directory, target]) == directory
 
 
 class Chain:
