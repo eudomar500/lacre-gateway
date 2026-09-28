@@ -80,3 +80,28 @@ def test_extraction_settings_are_read():
 def test_what_is_refused_for_extraction(change, message):
     with pytest.raises(config.ConfigError, match=message):
         config.load(dict(GOOD, **change))
+
+
+def test_mailbox_defaults():
+    settings = config.load(dict(GOOD))
+    assert settings.mail_domain == "in-sidr.xyz"
+    assert settings.inbound_secret == ""
+
+
+def test_mailbox_settings_are_read_and_the_secret_is_not_shown():
+    secret = "q" * 40
+    settings = config.load(dict(GOOD, LACRE_MAIL_DOMAIN="Mail.Example.org.",
+                                LACRE_INBOUND_SECRET=secret))
+    assert settings.mail_domain == "mail.example.org"
+    assert settings.inbound_secret == secret
+    assert secret not in repr(settings)
+
+
+@pytest.mark.parametrize("change,message", [
+    ({"LACRE_MAIL_DOMAIN": "localhost"}, "LACRE_MAIL_DOMAIN"),
+    ({"LACRE_MAIL_DOMAIN": "in sidr.xyz"}, "LACRE_MAIL_DOMAIN"),
+    ({"LACRE_INBOUND_SECRET": "short"}, "32 characters"),
+])
+def test_what_is_refused_for_mailboxes(change, message):
+    with pytest.raises(config.ConfigError, match=message):
+        config.load(dict(GOOD, **change))

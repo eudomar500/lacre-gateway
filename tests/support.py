@@ -40,6 +40,7 @@ VERIFIER_OLD = "0x" + "b1" * 20
 KEYCACHE = "0x" + "c3" * 20
 REQUESTER = "0x" + "d4" * 20
 API_KEY = "test-key-" + "x" * 24
+INBOUND_SECRET = "test-inbound-" + "s" * 32
 EXPLORER = "https://explorer-bradbury.genlayer.com"
 
 
@@ -89,7 +90,7 @@ def settings(tmp_path, **changes):
                   poll_s=30, final_bound_s=4 * 3600, max_attempts=3,
                   max_send_failures=3, key_quarantine_s=24 * 3600,
                   confirm_margin_s=600, confirm_retry_s=3600, worker_stale_s=300,
-                  extract_default="none")
+                  extract_default="none", inbound_secret=INBOUND_SECRET)
     values.update(changes)
     return Settings(**values)
 

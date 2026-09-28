@@ -9,9 +9,18 @@ sender's mail system, not a person. bh and the blob digest are hashes. Of an
 extraction, only the fields the Extractor stored on chain are kept, and they
 are public there already: booleans, a weekday, a date, digests and a fixed
 reason phrase. No order number is ever among them.
+
+A mailbox row holds its random id, the SHA-256 of the API key that owns
+it (never the key), its extract mode and counters. Mail that arrives there
+goes through the same path as an upload: nothing of it is written here but
+what a job keeps, plus the mailbox id the job came through. The addresses
+of the sender and of any other recipient are never stored. The inbound
+replay table holds HMAC values only, for the length of the replay window.
 """
 
+import base64
 import json
+import secrets
 import sqlite3
 import threading
 import time
@@ -73,6 +82,24 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mailboxes (
+    id               TEXT PRIMARY KEY,
+    owner            TEXT NOT NULL,
+    extract_mode     TEXT NOT NULL,
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    received         INTEGER NOT NULL DEFAULT 0,
+    dropped          INTEGER NOT NULL DEFAULT 0,
+    last_received_at REAL,
+    created_at       REAL NOT NULL,
+    disabled_at      REAL
+);
+CREATE INDEX IF NOT EXISTS mailboxes_owner ON mailboxes (owner);
+-- Signatures of inbound deliveries already taken, so the same signed
+-- request cannot create a second job while its timestamp is still fresh.
+CREATE TABLE IF NOT EXISTS inbound_seen (
+    signature TEXT PRIMARY KEY,
+    seen_at   REAL NOT NULL
+);
 """
 
 # Columns added after v0, by ALTER TABLE on a database that lacks them, so
@@ -97,6 +124,15 @@ EXTRACTION_COLUMNS = (
     ("ext_record_id", "TEXT"),
     ("ext_record", "TEXT"),
 )
+# Added with mailboxes. A job from before them reads as via NULL, which is
+# treated as "api", and has no owner.
+MAILBOX_COLUMNS = (
+    # api or inbound.
+    ("via", "TEXT"),
+    ("mailbox", "TEXT"),
+    # SHA-256 of the API key the job was created for.
+    ("owner", "TEXT"),
+)
 JSON_COLUMNS = ("tx_ids", "records_before", "ext_tx_ids", "ext_before", "ext_record")
 
 OPEN = ("pending", "attesting", "extracting")
@@ -115,9 +151,11 @@ class Store:
             self._db.execute("PRAGMA foreign_keys=ON")
             self._db.executescript(SCHEMA)
             have = {r[1] for r in self._db.execute("PRAGMA table_info(jobs)")}
-            for name, kind in EXTRACTION_COLUMNS:
+            for name, kind in EXTRACTION_COLUMNS + MAILBOX_COLUMNS:
                 if name not in have:
                     self._db.execute("ALTER TABLE jobs ADD COLUMN %s %s" % (name, kind))
+            self._db.execute("CREATE INDEX IF NOT EXISTS jobs_mailbox ON jobs (mailbox) "
+                             "WHERE mailbox IS NOT NULL")
             # v0's partial index left extracting jobs out.
             self._db.execute("DROP INDEX IF EXISTS jobs_open")
             self._db.execute("CREATE INDEX IF NOT EXISTS jobs_active ON jobs (status) "
@@ -163,18 +201,18 @@ class Store:
     # ---- jobs --------------------------------------------------------------
 
     def create_job(self, sender_id, headers_sha256, bh, body_hash_ok, extract_mode="none",
-                   skipped=None):
+                   skipped=None, via="api", mailbox=None, owner=None):
         """A new pending job. skipped is the reason an extraction that was
         asked for cannot run, known already at upload."""
         now = self.clock()
         job_id = uuid.uuid4().hex
         self._run(
             "INSERT INTO jobs (id, status, stage, sender_id, headers_sha256, bh, body_hash_ok, "
-            "extract_mode, ext_status, ext_note, created_at, updated_at) "
-            "VALUES (?, 'pending', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "extract_mode, ext_status, ext_note, via, mailbox, owner, created_at, updated_at) "
+            "VALUES (?, 'pending', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (job_id, sender_id, headers_sha256, bh,
              None if body_hash_ok is None else int(body_hash_ok), extract_mode,
-             "skipped" if skipped else None, skipped, now, now))
+             "skipped" if skipped else None, skipped, via, mailbox, owner, now, now))
         return job_id
 
     def job(self, job_id):
@@ -204,6 +242,73 @@ class Store:
         rows = self._all("SELECT record_id FROM jobs WHERE lower(verifier) = lower(?) "
                          "AND record_id IS NOT NULL AND id != ?", (verifier, other_than))
         return {r["record_id"] for r in rows}
+
+    def mailbox_jobs(self, mailbox_id, limit, offset):
+        """A page of the jobs that came through mailbox_id, newest first."""
+        # rowid breaks ties between jobs created in the same clock tick, so
+        # pages do not overlap or skip.
+        ids = self._all("SELECT id FROM jobs WHERE mailbox = ? "
+                        "ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?",
+                        (mailbox_id, limit, offset))
+        return [self.job(r["id"]) for r in ids]
+
+    # ---- mailboxes -----------------------------------------------------------
+
+    def create_mailbox(self, owner, extract_mode):
+        """A new enabled mailbox with a fresh random id."""
+        now = self.clock()
+        for _ in range(5):
+            # 8 random bytes make 13 base32 characters; the first 12 carry 60
+            # uniformly random bits.
+            mailbox_id = base64.b32encode(secrets.token_bytes(8)).decode("ascii")[:12].lower()
+            try:
+                self._run("INSERT INTO mailboxes (id, owner, extract_mode, created_at) "
+                          "VALUES (?, ?, ?, ?)", (mailbox_id, owner, extract_mode, now))
+            except sqlite3.IntegrityError:
+                continue
+            return self.mailbox(mailbox_id)
+        raise RuntimeError("no free mailbox id after 5 draws")
+
+    def mailbox(self, mailbox_id):
+        return self._one("SELECT * FROM mailboxes WHERE id = ?", (mailbox_id,))
+
+    def mailboxes(self, owner):
+        return self._all("SELECT * FROM mailboxes WHERE owner = ? "
+                         "ORDER BY created_at, rowid", (owner,))
+
+    def disable_mailbox(self, mailbox_id):
+        self._run("UPDATE mailboxes SET enabled = 0, disabled_at = ? "
+                  "WHERE id = ? AND enabled = 1", (self.clock(), mailbox_id))
+
+    def count_inbound(self, mailbox_id, received):
+        if received:
+            self._run("UPDATE mailboxes SET received = received + 1, last_received_at = ? "
+                      "WHERE id = ?", (self.clock(), mailbox_id))
+        else:
+            self._run("UPDATE mailboxes SET dropped = dropped + 1 WHERE id = ?", (mailbox_id,))
+
+    def count_unknown_inbound(self):
+        """Mail to a mailbox id that does not exist has no row to count on."""
+        with self._lock:
+            self._run("INSERT OR IGNORE INTO meta (key, value) VALUES ('inbound_unknown', '0')")
+            self._run("UPDATE meta SET value = CAST(value AS INTEGER) + 1 "
+                      "WHERE key = 'inbound_unknown'")
+
+    def unknown_inbound(self):
+        row = self._one("SELECT value FROM meta WHERE key = 'inbound_unknown'")
+        return int(row["value"]) if row else 0
+
+    def remember_signature(self, signature, keep_s):
+        """True the first time signature is seen within keep_s, else False."""
+        now = self.clock()
+        with self._lock:
+            self._run("DELETE FROM inbound_seen WHERE seen_at < ?", (now - keep_s,))
+            try:
+                self._run("INSERT INTO inbound_seen (signature, seen_at) VALUES (?, ?)",
+                          (signature, now))
+            except sqlite3.IntegrityError:
+                return False
+        return True
 
     # ---- in-flight ---------------------------------------------------------
 

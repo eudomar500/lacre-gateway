@@ -1,0 +1,22 @@
+# Email Worker that hands mail for lacre-<id>@in-sidr.xyz to the gateway.
+#
+# Wrangler has no setting that attaches a Worker to an Email Routing rule.
+# The binding is the catch-all rule of the zone, with the action "Send to a
+# Worker" and this Worker's name; see README.md in this directory.
+
+name = "lacre-mailboxes"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# No HTTP route: this Worker only has an email handler.
+workers_dev = false
+
+[vars]
+LACRE_MAIL_DOMAIN = "in-sidr.xyz"
+LACRE_INBOUND_URL = "https://lacre.in-sidr.xyz/inbound"
+# Keep equal to the gateway's LACRE_MAX_EML_BYTES, so oversized mail is
+# refused before it is read.
+LACRE_MAX_EML_BYTES = "10485760"
+
+# LACRE_INBOUND_SECRET is a Worker secret, never a var:
+#   wrangler secret put LACRE_INBOUND_SECRET

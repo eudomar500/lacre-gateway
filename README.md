@@ -3,7 +3,10 @@
 The gateway takes an email as an .eml upload, attests its DKIM signature on
 GenLayer Testnet Bradbury through the public Lacre contracts, and then, by
 default, extracts what the body says through one of the two Extractors. One
-POST gives an agent the verified sender and the extracted fields. It is the private product layer over the public repository
+POST gives an agent the verified sender and the extracted fields. An agent
+can also hold a mailbox, an address of its own: mail that arrives there
+takes the same path without the agent uploading anything (see
+[Mailboxes](#mailboxes)). It is the private product layer over the public repository
 [lacre](https://github.com/eudomar500/lacre), which is pinned here as the
 submodule `vendor/lacre` and is where every chain rule comes from
 (`vendor/lacre/docs/interfaces.md`, section 5). The gateway imports that
@@ -111,10 +114,19 @@ time the extraction starts.
 - **The order number is never kept.** Neither Extractor stores it; the
   pattern lane stores only whether one was found, and the gateway keeps
   only the stored fields.
+- **A mailbox receives the full message.** Mail to a mailbox reaches the
+  gateway whole, every header and the body, as an upload does, and is then
+  handled exactly as an upload is: the same selection, the same staging,
+  the same deletion. The same retention rules apply; nothing about a
+  delivery is kept that an uploaded job would not keep, apart from the id
+  of the mailbox it came through and the mailbox's counters.
 - **Nothing personal in the database.** No email address, subject, header
   value or body. The only values taken from a message are the signing domain
   and selector (`d=`, `s=`), which are public arguments of every KeyCache and
   Verifier call, and two hashes (`bh`, the SHA-256 of the served headers).
+  A mailbox address is the gateway's own random name, not a person's; the
+  sender of mail to it is never stored. API keys are stored only as
+  SHA-256 digests, to say which key owns a mailbox or a job.
 - **Nothing personal in the logs.** The gateway logs job ids, tx ids and
   statuses. The public tools print to stdout for a person at a terminal;
   the service sends their stdout nowhere. The HTTP access log is off,
@@ -125,12 +137,18 @@ time the extraction starts.
 
 ## Endpoints
 
-Every endpoint takes the API key in `X-API-Key`. Times are UTC ISO 8601.
+Every endpoint takes the API key in `X-API-Key`, except `POST /inbound`
+(see [Mailboxes](#mailboxes)). Times are UTC ISO 8601.
 
 | method and path | answer |
 |-----------------|--------|
 | `POST /attest` | multipart form, field `eml`, optional field `extract` (`none`, `patterns`, `llm`, `auto`; default `LACRE_EXTRACT_DEFAULT`, `auto`). `202 {"job_id", "status": "pending", "job", "extract"}`. 422 for a message that cannot be attested or an unknown `extract`, 413 over `LACRE_MAX_EML_BYTES`. |
-| `GET /jobs/{id}` | `status` (`pending`, `attesting`, `extracting`, `finalized`, `refused`, `failed`), `stage`, timestamps, `consensus_tx` and `explorer` once sent (every attempt in `consensus_txs`), `tx_status`, `sender_confirm_after` while the sender is in verification, `record_id`, `verifier` and `valid_and_aligned` when written (a record means the check ran, not that it passed), `refusal_reason` when refused, `error` when failed, `body_hash_matches`, and `extraction` (below; `null` for `extract=none`). |
+| `GET /jobs/{id}` | `status` (`pending`, `attesting`, `extracting`, `finalized`, `refused`, `failed`), `stage`, timestamps, `consensus_tx` and `explorer` once sent (every attempt in `consensus_txs`), `tx_status`, `sender_confirm_after` while the sender is in verification, `record_id`, `verifier` and `valid_and_aligned` when written (a record means the check ran, not that it passed), `refusal_reason` when refused, `error` when failed, `body_hash_matches`, `via` (`api` for an upload, `inbound` for mail to a mailbox), `mailbox` (its id, or `null`), and `extraction` (below; `null` for `extract=none`). |
+| `POST /mailboxes` | optional form field `extract` (as for `/attest`; default `LACRE_EXTRACT_DEFAULT`). `201` with the mailbox: `id` (12 base32 characters), `address` (`lacre-<id>@<LACRE_MAIL_DOMAIN>`), `extract`, `enabled`, `received`, `dropped`, `last_received_at`, `created_at`, `disabled_at`, `jobs`. |
+| `GET /mailboxes` | `{"mailboxes": [...]}`, the caller key's mailboxes, oldest first. |
+| `GET /mailboxes/{id}` | one mailbox. 404 for an id that does not exist or belongs to another key; the two are not told apart. |
+| `DELETE /mailboxes/{id}` | disables the mailbox and returns it. It is kept, with its jobs and counters; mail to it is dropped from then on. |
+| `GET /mailboxes/{id}/jobs` | `{"jobs": [...], "limit", "offset", "next"}`: the mailbox's jobs, newest first, each as `GET /jobs/{id}` shows it. `limit` 1 to 100 (default 20), `offset` from 0; `next` is the path of the next page, or `null`. |
 | `GET /records/{id}` | the record, read from the Verifier at `LATEST_FINAL`. The Verifier is resolved through the Router on every request. `?verifier=` reads an earlier Verifier, only one the Router's history names. The answer carries `verifier` (a record id means nothing without it), `valid_and_aligned`, and `extractions`: the records on both Extractors, found through `records_of` for the gateway's wallet, whose `record_id` is this id and whose `verifier` is this Verifier, each as `{"lane", "extractor", "id", "record"}`. |
 | `GET /extractions/{lane}/{id}` | one extraction record, `lane` `patterns` or `llm`, read at `LATEST_FINAL` from the Extractor the Router names for that lane now: `{"lane", "extractor", "id", "read_at", "record"}`. |
 | `GET /senders/{domain}/{selector}` | `state`: `active`, `pending` (with `confirm_after` and `can_confirm_now`), `unknown`, `rotated` or `retired`, from the KeyCache at `LATEST_FINAL`. |
@@ -159,6 +177,105 @@ A record is final when the job is `finalized`: the gateway never reports one
 before its call is FINALIZED. A consumer still decides on the record, with
 `check_for` on the Verifier, and reads the key status at decision time, as
 `vendor/lacre/docs/interfaces.md` section 5 requires.
+
+## Mailboxes
+
+A mailbox gives an agent an address, `lacre-<id>@in-sidr.xyz`. Mail sent
+there is attested, and extracted in the mailbox's `extract` mode, as if
+the key that owns the mailbox had uploaded it; the agent reads the results
+with `GET /mailboxes/{id}/jobs` or `GET /jobs/{id}`. The id is 12
+lowercase base32 characters (60 bits) from a CSPRNG. A mailbox belongs to
+the API key that created it, and another key cannot see, list, disable or
+read the jobs of it.
+
+Mail arrives through Cloudflare Email Routing: a catch-all rule on the zone
+hands every message to an Email Worker (`deploy/worker`), and the Worker
+posts the ones for mailbox addresses to the gateway.
+
+### The inbound contract
+
+`POST /inbound`, called by the Worker only.
+
+- Body: the message, RFC 5322, byte for byte as received. Over
+  `LACRE_MAX_EML_BYTES`: 413, before anything else is checked.
+- `X-Lacre-Recipient`: the envelope recipient, `lacre-<id>@<domain>`,
+  compared in lower case.
+- `X-Lacre-Timestamp`: Unix time in seconds when the Worker signed.
+- `X-Lacre-Signature`: lowercase hex HMAC-SHA256, keyed with
+  `LACRE_INBOUND_SECRET`, over
+  `<timestamp> LF <recipient> LF <raw message>`, the header values exactly
+  as sent.
+
+Answers: `202` with the same stub as `POST /attest`
+(`{"job_id", "status": "pending", "job", "extract"}`); `401` for a missing,
+malformed or wrong signature, or a timestamp more than 300 seconds from the
+gateway clock either way; `409` for a signature already taken inside that
+window; `404` for an address that is not a mailbox, an unknown mailbox or a
+disabled one; `422` for a message that cannot be attested, as for
+`/attest`; `503` when `LACRE_INBOUND_SECRET` is not set. Only a 202 creates
+a job.
+
+Mail to a disabled mailbox counts in its `dropped`; so does mail that was
+signed correctly but could not be attested. Mail to an unknown mailbox has
+no row to count on and counts in `inbound_unknown_dropped` of `/health`.
+`received` and `last_received_at` count the deliveries that became jobs.
+Nothing of a dropped message is stored or staged.
+
+To try the contract by hand (`$SECRET` is `LACRE_INBOUND_SECRET`):
+
+```
+RCPT=lacre-<id>@in-sidr.xyz
+TS=$(date +%s)
+SIG=$( { printf '%s\n%s\n' "$TS" "$RCPT"; cat message.eml; } \
+    | openssl dgst -sha256 -hmac "$SECRET" -r | cut -d' ' -f1 )
+curl -s -X POST https://lacre.in-sidr.xyz/inbound \
+    -H "Content-Type: message/rfc822" \
+    -H "X-Lacre-Recipient: $RCPT" -H "X-Lacre-Timestamp: $TS" \
+    -H "X-Lacre-Signature: $SIG" --data-binary @message.eml
+```
+
+### Security model
+
+- **Why an HMAC and not an API key.** `/inbound` is reachable from the
+  internet, and whoever can post to it creates paid jobs for the mailbox's
+  owner. The Worker holds a secret no agent has, and the MAC covers the
+  exact bytes posted, so a request not made by the Worker, or changed on
+  the way, is refused.
+- **Why the timestamp and recipient are inside the MAC.** A MAC over the
+  body alone would let anyone who saw one request send it again later with
+  a fresh timestamp, or to another mailbox. Signed together, a captured
+  request is good for 300 seconds at most, and inside that window the
+  gateway remembers every signature it took and refuses it a second time.
+  Clock skew between Cloudflare and the VPS has to stay under that window.
+- **Why the Worker checks the recipient shape.** The catch-all rule gives
+  the Worker mail for every address on the zone. Checking
+  `^lacre-[a-z2-7]{12}@<domain>$` in the Worker means mail for any other
+  address is never read, signed or sent to the gateway, and the gateway is
+  not a place where arbitrary mail for the zone can land. The gateway checks
+  the shape again and looks the id up; it does not trust the Worker's check.
+- **What the Worker sees.** The whole message, as Cloudflare does for any
+  mail routed through it, and the secret. It keeps nothing: it logs the
+  mailbox id, the size and the gateway's status, never a header, the body,
+  the sender or the full address.
+- **What the Worker cannot do.** It holds no API key and cannot read jobs,
+  mailboxes, records or anything else from the gateway; `/inbound` answers
+  only with a job stub. A leaked Worker secret lets its holder create jobs
+  in existing mailboxes, not read them; rotate it on both sides.
+- **Bounces instead of silence.** When the gateway answers anything but
+  2xx, or cannot be reached, the Worker rejects the message permanently and
+  the sender gets a bounce. Mail is never accepted and then lost.
+
+### Privacy
+
+A mailbox means the gateway receives the full message: every header,
+including the addresses of the sender and of the other recipients, and the
+body. It is then handled exactly as an upload, and the same retention rules
+apply (see [Privacy guarantees](#privacy-guarantees)): only the signed
+headers are staged and served, the body is staged only for a mailbox whose
+`extract` is not `none`, everything is deleted when the job ends, and
+nothing of the message but what an uploaded job keeps is written to the
+database. Create a mailbox with `extract=none` for mail whose body must
+not go to the validators.
 
 ## Run locally against the fixtures
 
@@ -215,8 +332,11 @@ systemctl daemon-reload && systemctl enable --now lacre-gateway
 
 The service listens on 127.0.0.1:8080. `deploy/cloudflared.yml.example` is
 the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
-`/h/{token}`, `/b/{name}.bin` and the API paths only. Check with
+`/h/{token}`, `/b/{name}.bin`, `/inbound` and the API paths only. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
+
+Mailboxes need `LACRE_INBOUND_SECRET` in `gateway.env` and the Email
+Worker in `deploy/worker`; its README has the steps.
 
 The gateway serves bodies itself, at `/b/{name}.bin` on the same port as
 everything else, from its own data directory. The Caddy site on :8091 that
@@ -252,7 +372,9 @@ To update the public tools, move the submodule to a new commit of
 Environment only (see `deploy/gateway.env.example`):
 `LACRE_NETWORK`, `LACRE_ROUTER`, `LACRE_API_KEYS`, `LACRE_BLOB_BASE_URL`,
 `LACRE_BODY_BASE_URL` (default: `LACRE_BLOB_BASE_URL` with its last `/h`
-made `/b`), `LACRE_EXTRACT_DEFAULT` (`auto`), `LACRE_DATA_DIR`, `LACRE_SIGNING_KEY_FILE` (a path; without it the gateway
+made `/b`), `LACRE_EXTRACT_DEFAULT` (`auto`), `LACRE_MAIL_DOMAIN`
+(`in-sidr.xyz`), `LACRE_INBOUND_SECRET` (at least 32 characters; without
+it `/inbound` answers 503), `LACRE_DATA_DIR`, `LACRE_SIGNING_KEY_FILE` (a path; without it the gateway
 reads but sends nothing), and the delays `LACRE_POLL_S`,
 `LACRE_FINAL_BOUND_S`, `LACRE_MAX_ATTEMPTS`, `LACRE_MAX_SEND_FAILURES`,
 `LACRE_KEY_QUARANTINE_S`, `LACRE_CONFIRM_MARGIN_S`, `LACRE_CONFIRM_RETRY_S`,

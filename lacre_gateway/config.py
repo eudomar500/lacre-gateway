@@ -12,6 +12,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_LABEL = r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+# At least two labels: Email Routing works on a zone, never a bare host name.
+DOMAIN = re.compile(r"^%s(\.%s)+$" % (_LABEL, _LABEL))
+# Shorter than this and the HMAC over inbound mail is only as strong as a
+# guessable password.
+MIN_INBOUND_SECRET = 32
 EXTRACT_MODES = ("none", "patterns", "llm", "auto")
 
 
@@ -75,6 +81,11 @@ class Settings:
     # Where /b/{name}.bin is reachable from the internet; "" means derived
     # from blob_base_url (body_url below).
     body_base_url: str = ""
+    # The domain mailbox addresses live under: lacre-<id>@<mail_domain>.
+    mail_domain: str = "in-sidr.xyz"
+    # The key the Worker signs inbound mail with. "" turns POST /inbound
+    # off: nothing can be delivered without it.
+    inbound_secret: str = field(default="", repr=False)
 
     @property
     def body_url(self):
@@ -122,6 +133,13 @@ def load(env=None):
     # The Extractors refuse any body URL that does not start with https://.
     if not body_base.startswith("https://"):
         raise ConfigError("LACRE_BODY_BASE_URL must start with https://")
+    mail_domain = env.get("LACRE_MAIL_DOMAIN", "").strip().lower().rstrip(".") or "in-sidr.xyz"
+    if not DOMAIN.match(mail_domain):
+        raise ConfigError("LACRE_MAIL_DOMAIN must be a domain name")
+    inbound_secret = env.get("LACRE_INBOUND_SECRET", "").strip()
+    if inbound_secret and len(inbound_secret) < MIN_INBOUND_SECRET:
+        raise ConfigError("LACRE_INBOUND_SECRET must be at least %d characters"
+                          % (MIN_INBOUND_SECRET,))
     return Settings(
         network=network,
         router=router,
@@ -140,4 +158,6 @@ def load(env=None):
         max_eml_bytes=_int(env, "LACRE_MAX_EML_BYTES", 10 * 1024 * 1024),
         extract_default=mode,
         body_base_url=body_base,
+        mail_domain=mail_domain,
+        inbound_secret=inbound_secret,
     )
