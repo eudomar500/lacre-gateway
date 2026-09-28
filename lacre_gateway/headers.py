@@ -5,9 +5,10 @@ the moment the attest call is submitted, and anyone reading the chain can
 fetch them for as long as they are served. So the blob holds only what the
 chosen DKIM-Signature covers, which the signer already committed to, plus
 that DKIM-Signature: Received, Return-Path, ARC, X- headers and everything
-else is dropped, and the body never leaves this module. The body is used
-for one thing, to check it against the signature's bh=, and is then
-discarded with the rest of the upload.
+else is dropped. The body is checked against the signature's bh= and, unless
+the job asked for an extraction, discarded with the rest of the upload. For
+an extraction, extraction_body picks the exact octets the Extractor will be
+served; nothing of the headers goes with them.
 
 Fields are read with lacre/dkimcore.parse_headers, the parser the Verifier
 runs on chain, so the blob is split into fields exactly as the Verifier will
@@ -19,12 +20,15 @@ import hashlib
 from collections import Counter
 from dataclasses import dataclass
 
-from .vendor import attest, dkimbody, dkimcore
+from .vendor import attest, dkimbody, dkimcore, extract
 
 # The Verifier stores a paid, invalid "blob too large" record for a fetched
 # blob over this size (contracts/verifier, MAX_BLOB).
 MAX_BLOB = attest.MAX_BLOB
 NO_L = "body length limit not supported"
+# The Extractors store a charged "body too large" record for a fetched body
+# over this size (contracts/extractor, the body cap).
+MAX_BODY = 262144
 
 
 class UnusableMail(ValueError):
@@ -158,3 +162,24 @@ def select(raw):
         headers_sha256=hashlib.sha256(blob).hexdigest(),
         kept=tuple(dkimcore.field_name(fields[i][0]).decode("latin-1") for i in ordered),
     )
+
+
+def extraction_body(raw, chosen):
+    """(body, None) to serve to an Extractor, or (None, why it cannot be).
+
+    The body is the raw octets after the first CRLF CRLF, byte-exact, which
+    is what the validators hash under the record's body_canon. Each reason
+    here is a call that would be refused or would store a charged record
+    with match false, so it is not made.
+    """
+    cut = raw.find(b"\r\n\r\n")
+    if cut < 0:
+        return None, "the message has no CRLF CRLF between headers and body"
+    body = raw[cut + 4:]
+    if len(body) > MAX_BODY:
+        return None, "the body is over %d bytes" % (MAX_BODY,)
+    if chosen.body_canon not in extract.CANONS:
+        return None, "body canonicalization not supported"
+    if dkimbody.body_hash_b64(body, chosen.body_canon) != chosen.bh:
+        return None, "the body does not match the signature's bh="
+    return body, None

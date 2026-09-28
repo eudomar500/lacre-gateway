@@ -10,6 +10,11 @@ One pass (tick) does, in order:
 2. Jobs. A pending job whose key is active is sent; a job with a call in
    flight is followed to FINALIZED and judged with attest.judge, the same
    decision tools/attest.py makes: recorded, refused, send again, or stop.
+3. Extractions. A job that asked for one, whose Verifier record is
+   FINALIZED, valid and aligned, goes on: its lane is chosen, its body is
+   served, extract is sent, and the call is followed and judged exactly as
+   tools/extract.py does, with attest.outcome over the Extractor's
+   records_of and last_refusal and extract.ours as the matching rule.
 
 The rules this enforces, from docs/interfaces.md section 5:
 
@@ -25,18 +30,25 @@ The rules this enforces, from docs/interfaces.md section 5:
   is undecided, appealed or CANCELED (rule 11). A stored CANCELED is not
   final (rule 14), so it is waited on like an undecided status until the
   bound, and then the job stops without sending again.
-- attest carries exactly fee(), read just before the send (rule 9).
+- attest and extract carry exactly fee(), read just before the send (rule 9).
+- An Extractor's slot is held from the moment a job's body is served until
+  its extraction ends, across attempts, not only until the call is decided.
+  last_refusal is one value per requester and one gateway wallet sends for
+  every job, so a second job's refusal landing between this job's snapshot
+  and its outcome would otherwise be read as this job's.
 
-Nothing personal is logged: job ids, tx ids and statuses only.
+Nothing personal is logged: job ids, tx ids and statuses only. Body URLs,
+bodies and extracted fields are never logged.
 """
 
 import logging
 import threading
 import time
 
-from .chainio import ChainUnavailable, NothingSent, Stop
-from .contracts import confirm_after, sender_state
-from .vendor import attest, txstate
+from .blobs import BODY, BlobStore
+from .chainio import FINAL, ChainUnavailable, NothingSent, Stop
+from .contracts import EXTRACTION_FIELDS, LANES, confirm_after, sender_state
+from .vendor import attest, extract, txstate
 
 log = logging.getLogger("lacre_gateway.worker")
 
@@ -45,6 +57,10 @@ WAIT = "wait"
 
 READY = "ready"
 IN_VERIFICATION = "sender in verification"
+SERVING_BODY = "serving body"
+EXTRACTING = "extracting"
+WAITING_EXTRACTION = "waiting for extraction FINALIZED"
+EXTRACTED = "extracted"
 
 
 def decide(state, found, requester, bound_reached):
@@ -81,10 +97,11 @@ def matches(record, call, bh):
 
 
 class Worker:
-    def __init__(self, settings, store, blobs, contracts, clock=time.time):
+    def __init__(self, settings, store, blobs, contracts, clock=time.time, bodies=None):
         self.settings = settings
         self.store = store
         self.blobs = blobs
+        self.bodies = bodies or BlobStore(settings.body_dir, settings.body_url, BODY)
         self.contracts = contracts
         self.chain = contracts.chain
         self.clock = clock
@@ -231,6 +248,8 @@ class Worker:
     # ---- jobs ----------------------------------------------------------------
 
     def job_step(self, job):
+        if job["status"] == "extracting":
+            return self.extraction_step(job)
         if job["current_tx"]:
             return self._follow(job)
         sender = self.store.sender_by_id(job["sender_id"])
@@ -331,8 +350,8 @@ class Worker:
             record_id, record = found["records"][0]
             # A record means the check ran, not that it passed (rule 2).
             verdict_ok = bool(record.get("valid")) and bool(record.get("aligned"))
-            return self._finish(job, "finalized", "recorded", record_id=record_id,
-                                valid_aligned=int(verdict_ok), **values)
+            values.update(record_id=record_id, valid_aligned=int(verdict_ok))
+            return self._recorded(job, verdict_ok, values)
         if verdict == REFUSED:
             return self._finish(job, "refused", "refused by the Verifier",
                                 refusal_reason=found["reason"], **values)
@@ -370,8 +389,187 @@ class Worker:
         reason = self.contracts.last_refusal(verifier, requester)
         return {"records": [], "reason": reason or None}
 
+    def _recorded(self, job, valid_aligned, values):
+        """The attest record is read back: finish, or go on to extract."""
+        if (job["extract_mode"] or "none") != "none" and job["ext_status"] is None:
+            why = None
+            if not valid_aligned:
+                # Both Extractors refuse such a record; nothing is sent.
+                why = "the Verifier record is not valid and aligned"
+            elif not self.bodies.is_staged(job["id"]):
+                why = "the body is gone"
+            if why is None:
+                # The attest call is over, so its headers go now; the body
+                # stays staged, unreachable, until its own call.
+                self.blobs.delete(job["id"], job["blob_token"])
+                self.store.update_job(job["id"], status="extracting", stage="recorded",
+                                      current_tx=None, **values)
+                log.info("job %s: recorded, extraction next", job["id"])
+                return
+            values.update(ext_status="skipped", ext_note=why)
+        return self._finish(job, "finalized", "recorded", **values)
+
+    # ---- extractions -------------------------------------------------------
+
+    def _view(self, address, method, args, variant):
+        """The public tools' view(address, method, args, variant) over Chain.
+
+        A failed read raises ChainUnavailable instead of returning UNKNOWN,
+        so the pass ends and the step is taken again on the next one from
+        the state stored so far, as every other step of the worker is.
+        """
+        return self.chain.view(address, method, list(args), final=(variant == FINAL))
+
+    def extraction_step(self, job):
+        if job["ext_current_tx"]:
+            return self._follow_extraction(job)
+        if not self.chain.can_sign:
+            return
+        if job["body_name"] is None:
+            return self._serve_body(job)
+        return self._send_extraction(job)
+
+    def _lane(self, job):
+        mode = job["extract_mode"]
+        if mode != "auto":
+            return mode
+        sender = self.store.sender_by_id(job["sender_id"])
+        extractor = self.contracts.extractor("patterns")
+        if extractor and self.contracts.has_patterns(extractor, sender["domain"]):
+            return "patterns"
+        return "llm"
+
+    def _current_verifier(self):
+        return str(self.chain.view(self.contracts.router, "resolve", ["verifier"], final=True)
+                   or "")
+
+    def _serve_body(self, job):
+        owner = "job:%s" % (job["id"],)
+        if not self.bodies.is_staged(job["id"]):
+            return self._end_extraction(job, "failed", "extraction stopped", "the body is gone")
+        lane = job["ext_lane"] or self._lane(job)
+        try:
+            extractor, verifier = extract.resolve(self._view, self.contracts.router, LANES[lane])
+        except Stop as error:
+            return self._end_extraction(job, "failed", "extraction stopped", str(error),
+                                        ext_lane=lane)
+        if verifier.lower() != job["verifier"].lower():
+            # The Extractor reads the record id on the Verifier the Router
+            # names now, where it is another record or none.
+            return self._end_extraction(job, "skipped", "recorded",
+                                        "the Router now resolves another Verifier", ext_lane=lane)
+        if not self.store.acquire(extractor, owner):
+            self.store.update_job(job["id"], stage="waiting for the Extractor", ext_lane=lane)
+            return
+        try:
+            requester = self.chain.requester
+            before = job["ext_before"] or attest.snapshot(
+                self._view, {"verifier": extractor, "sender": requester}, FINAL)
+            name, _ = self.bodies.publish(job["id"])
+        except Exception:
+            self.store.release(extractor, owner)
+            raise
+        # Stored before anything is sent: the file has to be deleted
+        # whatever happens next.
+        self.store.update_job(job["id"], stage=SERVING_BODY, ext_lane=lane, extractor=extractor,
+                              ext_before=before, body_name=name)
+        log.info("job %s: body served for the %s lane", job["id"], lane)
+
+    def _send_extraction(self, job):
+        owner = "job:%s" % (job["id"],)
+        extractor = job["extractor"]
+        if not self.store.acquire(extractor, owner):
+            self.store.update_job(job["id"], stage="waiting for the Extractor")
+            return
+        verifier = self._current_verifier()
+        if verifier.lower() != job["verifier"].lower():
+            return self._end_extraction(job, "skipped", "recorded",
+                                        "the Router now resolves another Verifier")
+        now = self.clock()
+        fee = self.contracts.fee(extractor)
+        url = self.bodies.url(job["body_name"])
+        try:
+            # The checks the Extractor runs first, in its order: a call it
+            # would refuse is not sent (tools/extract.py main).
+            reason = extract.refusal(self._view, extractor, verifier, job["record_id"], url, fee,
+                                     job["ext_lane"])
+        except Stop as error:
+            return self._end_extraction(job, "failed", "extraction stopped", str(error))
+        if reason is not None:
+            log.info("job %s: the extraction would be refused, not sent", job["id"])
+            return self._end_extraction(job, "refused", "extraction refused", reason)
+        try:
+            tx_id = self.chain.send(extractor, "extract", [job["record_id"], url], fee)
+        except NothingSent as error:
+            failures = job["ext_send_failures"] + 1
+            log.warning("job %s: extraction not sent (%s), failure %d", job["id"], error, failures)
+            if failures >= self.settings.max_send_failures:
+                return self._end_extraction(job, "failed", "extraction stopped",
+                                            "not sent: %s" % (error,), ext_send_failures=failures)
+            self.store.update_job(job["id"], ext_send_failures=failures)
+            return
+        except Stop as error:
+            log.error("job %s: extraction send stopped (%s)", job["id"], error)
+            return self._end_extraction(job, "failed", "extraction stopped",
+                                        "stopped: %s" % (error,))
+        self.store.set_inflight_tx(extractor, owner, tx_id)
+        self.store.update_job(
+            job["id"], stage=EXTRACTING, ext_value_wei=str(fee),
+            ext_attempts=job["ext_attempts"] + 1, ext_tx_ids=job["ext_tx_ids"] + [tx_id],
+            ext_current_tx=tx_id, ext_tx_status="PENDING", ext_submitted_at=now)
+        log.info("job %s: extraction attempt %d sent, tx %s", job["id"],
+                 job["ext_attempts"] + 1, tx_id)
+
+    def _follow_extraction(self, job):
+        now = self.clock()
+        tx_id = job["ext_current_tx"]
+        state = self.chain.stored(tx_id)
+        values = {"ext_tx_status": state["status"]}
+        bound = now - (job["ext_submitted_at"] or now) >= self.settings.final_bound_s
+        requester = self.chain.requester
+        found = None
+        if state["status"] == "FINALIZED" and txstate.executed(state):
+            call = {"verifier": job["extractor"], "record_id": job["record_id"],
+                    "sender": requester, "value": int(job["ext_value_wei"] or 0)}
+            found = attest.outcome(self._view, lambda: self.chain.messages(tx_id), state, call,
+                                   job["ext_before"], getter="get_record", matches=extract.ours,
+                                   contract="Extractor")
+        verdict, message = decide(state, found, requester, bound)
+        if verdict == WAIT:
+            values["stage"] = WAITING_EXTRACTION
+            self.store.update_job(job["id"], **values)
+            return
+        log.info("job %s: extraction %s (tx %s)", job["id"], verdict, tx_id)
+        if verdict == RECORDED:
+            ext_id, record = found["records"][0]
+            kept = {k: record[k] for k in EXTRACTION_FIELDS if k in record}
+            values.update(ext_record_id=ext_id, ext_record=kept)
+            if record.get("match") is True:
+                return self._end_extraction(job, "extracted", EXTRACTED, None, **values)
+            return self._end_extraction(job, "no match", "extraction did not match",
+                                        "the Extractor stored match false: %s"
+                                        % (kept.get("reason", ""),), **values)
+        if verdict == REFUSED:
+            return self._end_extraction(job, "refused", "extraction refused", found["reason"],
+                                        **values)
+        if verdict == RESEND and job["ext_attempts"] < self.settings.max_attempts:
+            # Nothing was written: the same call goes out again with the
+            # same URL, the body still served and the slot still held.
+            self.store.update_job(job["id"], stage=SERVING_BODY, ext_current_tx=None, **values)
+            return
+        if verdict == RESEND:
+            message = "%d extraction attempts, none executed" % (job["ext_attempts"],)
+        return self._end_extraction(job, "failed", "extraction stopped", message, **values)
+
+    def _end_extraction(self, job, ext_status, stage, note, **values):
+        """The job ends finalized: its attest record stands whatever the
+        extraction came to, and ext_status and ext_note say what that was."""
+        return self._finish(job, "finalized", stage, ext_status=ext_status, ext_note=note,
+                            ext_current_tx=None, **values)
+
     def _finish(self, job, status, stage, **values):
         self.blobs.delete(job["id"], values.get("blob_token", job["blob_token"]))
+        self.bodies.delete(job["id"], values.get("body_name", job["body_name"]))
         self.store.release_owner("job:%s" % (job["id"],))
         self.store.update_job(job["id"], status=status, stage=stage, current_tx=None, **values)
         log.info("job %s: %s", job["id"], status)

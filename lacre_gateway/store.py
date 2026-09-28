@@ -5,7 +5,10 @@ email address, subject, header value or body is ever written here. The two
 values taken from a message are the signing domain and selector (d= and s=),
 because every KeyCache and Verifier call takes them as public calldata
 arguments and a job may have to wait a day for its sender key; they name the
-sender's mail system, not a person. bh and the blob digest are hashes.
+sender's mail system, not a person. bh and the blob digest are hashes. Of an
+extraction, only the fields the Extractor stored on chain are kept, and they
+are public there already: booleans, a weekday, a date, digests and a fixed
+reason phrase. No order number is ever among them.
 """
 
 import json
@@ -58,7 +61,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     decided_at     REAL,
     finished_at    REAL
 );
-CREATE INDEX IF NOT EXISTS jobs_open ON jobs (status) WHERE status IN ('pending', 'attesting');
 -- One row per contract with a call of ours that is not decided yet
 -- (docs/interfaces.md section 5, rule 13). The primary key is the rule.
 CREATE TABLE IF NOT EXISTS inflight (
@@ -73,7 +75,31 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
-OPEN = ("pending", "attesting")
+# Columns added after v0, by ALTER TABLE on a database that lacks them, so
+# a deployed gateway keeps its jobs across the upgrade. A v0 job reads as
+# extract_mode NULL, which is treated as "none".
+EXTRACTION_COLUMNS = (
+    ("extract_mode", "TEXT"),
+    # skipped, extracted, no match, refused, failed; NULL while undecided.
+    ("ext_status", "TEXT"),
+    ("ext_note", "TEXT"),
+    ("ext_lane", "TEXT"),
+    ("extractor", "TEXT"),
+    ("body_name", "TEXT"),
+    ("ext_before", "TEXT"),
+    ("ext_value_wei", "TEXT"),
+    ("ext_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("ext_send_failures", "INTEGER NOT NULL DEFAULT 0"),
+    ("ext_tx_ids", "TEXT NOT NULL DEFAULT '[]'"),
+    ("ext_current_tx", "TEXT"),
+    ("ext_tx_status", "TEXT"),
+    ("ext_submitted_at", "REAL"),
+    ("ext_record_id", "TEXT"),
+    ("ext_record", "TEXT"),
+)
+JSON_COLUMNS = ("tx_ids", "records_before", "ext_tx_ids", "ext_before", "ext_record")
+
+OPEN = ("pending", "attesting", "extracting")
 TERMINAL = ("finalized", "refused", "failed")
 
 
@@ -88,6 +114,14 @@ class Store:
                 self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA foreign_keys=ON")
             self._db.executescript(SCHEMA)
+            have = {r[1] for r in self._db.execute("PRAGMA table_info(jobs)")}
+            for name, kind in EXTRACTION_COLUMNS:
+                if name not in have:
+                    self._db.execute("ALTER TABLE jobs ADD COLUMN %s %s" % (name, kind))
+            # v0's partial index left extracting jobs out.
+            self._db.execute("DROP INDEX IF EXISTS jobs_open")
+            self._db.execute("CREATE INDEX IF NOT EXISTS jobs_active ON jobs (status) "
+                             "WHERE status IN ('pending', 'attesting', 'extracting')")
 
     def _one(self, sql, args=()):
         with self._lock:
@@ -128,32 +162,36 @@ class Store:
 
     # ---- jobs --------------------------------------------------------------
 
-    def create_job(self, sender_id, headers_sha256, bh, body_hash_ok):
+    def create_job(self, sender_id, headers_sha256, bh, body_hash_ok, extract_mode="none",
+                   skipped=None):
+        """A new pending job. skipped is the reason an extraction that was
+        asked for cannot run, known already at upload."""
         now = self.clock()
         job_id = uuid.uuid4().hex
         self._run(
             "INSERT INTO jobs (id, status, stage, sender_id, headers_sha256, bh, body_hash_ok, "
-            "created_at, updated_at) VALUES (?, 'pending', 'queued', ?, ?, ?, ?, ?, ?)",
+            "extract_mode, ext_status, ext_note, created_at, updated_at) "
+            "VALUES (?, 'pending', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (job_id, sender_id, headers_sha256, bh,
-             None if body_hash_ok is None else int(body_hash_ok), now, now))
+             None if body_hash_ok is None else int(body_hash_ok), extract_mode,
+             "skipped" if skipped else None, skipped, now, now))
         return job_id
 
     def job(self, job_id):
         row = self._one("SELECT * FROM jobs WHERE id = ?", (job_id,))
         if row:
-            row["tx_ids"] = json.loads(row["tx_ids"])
-            row["records_before"] = (json.loads(row["records_before"])
-                                     if row["records_before"] is not None else None)
+            for key in JSON_COLUMNS:
+                row[key] = json.loads(row[key]) if row[key] is not None else None
         return row
 
     def open_jobs(self):
-        ids = self._all("SELECT id FROM jobs WHERE status IN ('pending', 'attesting') "
-                        "ORDER BY created_at")
+        ids = self._all("SELECT id FROM jobs WHERE status IN ('pending', 'attesting', "
+                        "'extracting') ORDER BY created_at")
         return [self.job(r["id"]) for r in ids]
 
     def update_job(self, job_id, **values):
         values["updated_at"] = self.clock()
-        for key in ("tx_ids", "records_before"):
+        for key in JSON_COLUMNS:
             if key in values and values[key] is not None:
                 values[key] = json.dumps(values[key])
         if "status" in values and values["status"] in TERMINAL:

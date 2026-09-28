@@ -11,6 +11,12 @@ and decoded with txstate.decode_stored, as the public repo's own tests do:
 States the fixtures do not hold (ACCEPTED, CANCELED, an appeal, an
 undecided PENDING) are the recorded ones with the status changed, the same
 way vendor/lacre/tests/test_attest.py builds them.
+
+The two Extractors are views over plain data too: records_of, get_record,
+last_refusal, fee, patterns and router, with the record shapes of
+docs/extractor.md and docs/llmextractor.md. What an extract call does at
+FINALIZED (write a record, refuse, or nothing) is set per tx with
+extract_outcome, so every outcome is deterministic.
 """
 
 import base64
@@ -25,6 +31,7 @@ from lacre_gateway.config import Settings
 from lacre_gateway.vendor import dkimcore, txstate
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+ROOT = Path(__file__).resolve().parents[1]
 ABI = testnet_bradbury.consensus_data_contract["abi"]
 
 ROUTER = "0x" + "a1" * 20
@@ -57,13 +64,32 @@ APPEALED = dict(AGREE, status="APPEAL_COMMITTING")
 UNDETERMINED = dict(TIMEOUT, status="UNDETERMINED", result="NO_MAJORITY")
 RECORD = json.loads((FIXTURES / "verifier_record.json").read_text(encoding="ascii"))
 
+EXTRACTOR = "0x" + "e5" * 20
+EXTRACTOR_LLM = "0x" + "e6" * 20
+AMAZON_PATTERNS = (ROOT / "vendor" / "lacre" / "lacre" / "extractors" / "amazon.json") \
+    .read_text(encoding="ascii").strip()
+# Extraction records as the two lanes store them for a match (the shapes of
+# docs/extractor.md and docs/llmextractor.md, "The record").
+_COMMON = {"schema_version": "1", "verifier": VERIFIER, "record_id": "0",
+           "domain": "amazon.com", "bh": RECORD["bh"], "match": True, "reason": "extracted",
+           "shipped": True, "eta_day": "jueves", "eta_date": "", "order_id_found": True,
+           "signed_at": "1790251922", "extracted_at": "2026-09-28T15:33:37+00:00"}
+EXTRACTED = {
+    "patterns": dict(_COMMON, method="patterns", patterns_sha256="cac2e3e0" + "0" * 56),
+    "llm": dict(_COMMON, method="llm", prompt_sha256="820e133d" + "0" * 56,
+                order_id_found=False, flagged=False),
+}
+
 
 def settings(tmp_path, **changes):
+    # extract_default is "none" here so the attest-only tests keep testing
+    # what they did; the extraction tests set it or pass extract.
     values = dict(network="bradbury", router=ROUTER, api_keys=(API_KEY,),
                   blob_base_url="https://gateway.example.org/h", data_dir=Path(tmp_path),
                   poll_s=30, final_bound_s=4 * 3600, max_attempts=3,
                   max_send_failures=3, key_quarantine_s=24 * 3600,
-                  confirm_margin_s=600, confirm_retry_s=3600, worker_stale_s=300)
+                  confirm_margin_s=600, confirm_retry_s=3600, worker_stale_s=300,
+                  extract_default="none")
     values.update(changes)
     return Settings(**values)
 
@@ -104,6 +130,14 @@ class FakeChain:
         self.reads = []
         # The last stored state the gateway was shown, per tx.
         self.current = {}
+        # The two Extractors (docs/extractor.md, docs/llmextractor.md).
+        self.resolves.update({"extractor": EXTRACTOR, "extractor_llm": EXTRACTOR_LLM})
+        self.extractions = {EXTRACTOR: {}, EXTRACTOR_LLM: {}}
+        self.ext_refusal = {EXTRACTOR: "", EXTRACTOR_LLM: ""}
+        self.extractor_router = {}
+        self.patterns = {"amazon.com": AMAZON_PATTERNS}
+        self.ext_fee = 0
+        self.tx_messages = {}
 
     # ---- programming -----------------------------------------------------
 
@@ -144,6 +178,21 @@ class FakeChain:
             return dict(self.keys.get((args[0], args[1]), {}))
         if address == KEYCACHE and method == "last_failure":
             return self.failures.get((args[0], args[1]), "")
+        if address in self.extractions:
+            book = self.extractions[address]
+            if method == "router":
+                return self.extractor_router.get(address, ROUTER)
+            if method == "fee":
+                return self.ext_fee
+            if method == "patterns" and address == EXTRACTOR:
+                return self.patterns.get(str(args[0]).strip().lower().strip("."), "")
+            if method == "records_of":
+                return [i for i, r in book.items()
+                        if r["requester"].lower() == args[0].lower()]
+            if method == "last_refusal":
+                return self.ext_refusal.get(address, "")
+            if method == "get_record":
+                return dict(book.get(str(args[0]), {}))
         if address in self.records:
             book = self.records[address]
             if method == "fee":
@@ -185,8 +234,48 @@ class FakeChain:
             self.on_final.pop(tx_id)()
         return state
 
+    def messages(self, tx_id):
+        if not self.up:
+            raise ChainUnavailable("down")
+        return list(self.tx_messages.get(tx_id, []))
+
     def sends(self, method=None):
         return [s for s in self.sent if method is None or s[2] == method]
+
+    # ---- the Extractors ----------------------------------------------------
+
+    def add_extraction(self, extractor=EXTRACTOR, **fields):
+        """A record on extractor, by default a match read by its lane."""
+        book = self.extractions[extractor]
+        ext_id = str(len(book))
+        lane = "patterns" if extractor == EXTRACTOR else "llm"
+        record = dict(EXTRACTED[lane], id=ext_id, requester=self.requester,
+                      fee_paid=str(self.ext_fee))
+        record.update(fields)
+        book[ext_id] = record
+        return ext_id
+
+    def extract_outcome(self, tx_id, outcome, **fields):
+        """What the extract call tx_id does once it reads FINALIZED.
+
+        outcome is "record" (with fields over a match), "refuse" (fields
+        carry reason), or "nothing" (a call that executed and wrote nothing).
+        The record is tied to the call's own arguments and value, as the
+        contract ties it.
+        """
+        _, extractor, method, args, value = next(s for s in self.sent if s[0] == tx_id)
+        assert method == "extract"
+
+        def happen():
+            if outcome == "record":
+                values = dict(record_id=args[0], fee_paid=str(value), verifier=VERIFIER)
+                values.update(fields)
+                self.add_extraction(extractor, **values)
+            elif outcome == "refuse":
+                self.ext_refusal[extractor] = fields["reason"]
+                if value:
+                    self.tx_messages[tx_id] = [{"recipient": self.requester, "value": value}]
+        self.on_final[tx_id] = happen
 
 
 def rsa_key(bits=1024):
@@ -232,16 +321,28 @@ def active_key(domain="amazon.com", selector="synthsel2026a"):
             "refreshed_at": "2026-09-21T00:10:00Z"}
 
 
-def submit(gw, raw=None):
+def submit(gw, raw=None, extract="none"):
     """What POST /attest does, without HTTP: (job id, Selection)."""
     from lacre_gateway import headers
 
-    chosen = headers.select(raw if raw is not None else amazon_eml())
+    raw = raw if raw is not None else amazon_eml()
+    chosen = headers.select(raw)
+    body = skipped = None
+    if extract != "none":
+        body, skipped = headers.extraction_body(raw, chosen)
     sender = gw.store.sender(chosen.domain, chosen.selector)
     job_id = gw.store.create_job(sender["id"], chosen.headers_sha256, chosen.bh,
-                                 chosen.body_hash_ok)
+                                 chosen.body_hash_ok, extract_mode=extract, skipped=skipped)
     gw.blobs.stage(job_id, chosen.blob)
+    if body is not None:
+        gw.bodies.stage(job_id, body)
     return job_id, chosen
+
+
+def eml_body(raw=None):
+    """The octets an Extractor is served for raw: after the first CRLF CRLF."""
+    raw = raw if raw is not None else amazon_eml()
+    return raw[raw.find(b"\r\n\r\n") + 4:]
 
 
 def our_record(gw, chosen, **fields):

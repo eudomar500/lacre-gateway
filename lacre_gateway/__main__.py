@@ -13,7 +13,7 @@ import uvicorn
 
 from . import config
 from .app import create_app
-from .blobs import BlobStore
+from .blobs import BODY, BlobStore
 from .chainio import Chain
 from .contracts import Contracts
 from .store import Store
@@ -49,9 +49,10 @@ def main():
     os.chmod(settings.data_dir, 0o700)
     store = Store(settings.db_path)
     blobs = BlobStore(settings.blob_dir, settings.blob_base_url)
+    bodies = BlobStore(settings.body_dir, settings.body_url, BODY)
     contracts = Contracts(Chain(settings.network, settings.signing_key_file), settings.router)
-    worker = Worker(settings, store, blobs, contracts)
-    app = create_app(settings, store, blobs, contracts, worker)
+    worker = Worker(settings, store, blobs, contracts, bodies=bodies)
+    app = create_app(settings, store, blobs, contracts, worker, bodies=bodies)
     worker.start()
     try:
         uvicorn.run(app, host=os.environ.get("LACRE_LISTEN_HOST", "127.0.0.1"),

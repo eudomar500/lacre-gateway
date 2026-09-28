@@ -4,8 +4,9 @@
 The chain is tests/support.FakeChain: every sender key reads as active, and
 every call the worker sends goes PENDING, ACCEPTED, then FINALIZED with the
 recorded AGREE state of consensus_call37_agree.json, writing a record that
-matches it. Everything else, the API, the store, the blob files and the
-worker, is the real code.
+matches it: a Verifier record for attest, an extraction record with match
+true for extract, on the lane the worker chose. Everything else, the API,
+the store, the header and body files and the worker, is the real code.
 
     .venv/bin/python scripts/run_offline.py
     curl -s -H "X-API-Key: $KEY" -F eml=@tests/fixtures/amazon_layout.eml \
@@ -29,7 +30,7 @@ import uvicorn  # noqa: E402
 
 import support  # noqa: E402
 from lacre_gateway.app import create_app  # noqa: E402
-from lacre_gateway.blobs import BlobStore  # noqa: E402
+from lacre_gateway.blobs import BODY, BlobStore  # noqa: E402
 from lacre_gateway.contracts import Contracts  # noqa: E402
 from lacre_gateway.store import Store  # noqa: E402
 from lacre_gateway.worker import Worker  # noqa: E402
@@ -51,6 +52,8 @@ class OfflineChain(support.FakeChain):
         if method == "attest":
             self.on_final[tx_id] = lambda: self.add_record(
                 domain=args[1], selector=args[2], bh=self.bh_of(tx_id), fee_paid=str(value))
+        elif method == "extract":
+            self.extract_outcome(tx_id, "record")
         return tx_id
 
     def bh_of(self, tx_id):
@@ -65,12 +68,14 @@ def main():
     data = tempfile.TemporaryDirectory(prefix="lacre-offline-")
     key = secrets.token_urlsafe(32)
     settings = support.settings(data.name, api_keys=(key,), poll_s=2,
-                                blob_base_url="https://localhost.invalid/h")
+                                blob_base_url="https://localhost.invalid/h",
+                                extract_default="auto")
     store = Store(settings.db_path)
     blobs = BlobStore(settings.blob_dir, settings.blob_base_url)
+    bodies = BlobStore(settings.body_dir, settings.body_url, BODY)
     contracts = Contracts(OfflineChain(store), settings.router)
-    worker = Worker(settings, store, blobs, contracts)
-    app = create_app(settings, store, blobs, contracts, worker)
+    worker = Worker(settings, store, blobs, contracts, bodies=bodies)
+    app = create_app(settings, store, blobs, contracts, worker, bodies=bodies)
     worker.start()
     print("API key: %s" % (key,), flush=True)
     try:

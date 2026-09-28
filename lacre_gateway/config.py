@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
+EXTRACT_MODES = ("none", "patterns", "llm", "auto")
 
 
 class ConfigError(ValueError):
@@ -29,6 +30,15 @@ def _int(env, name, default):
     if value < 0:
         raise ConfigError("%s cannot be negative" % (name,))
     return value
+
+
+def body_base_from(blob_base_url):
+    """LACRE_BODY_BASE_URL's default: the blob base with a last /h made /b.
+
+    "" when the blob base does not end in /h, so there is nothing to derive.
+    """
+    base = blob_base_url.rstrip("/")
+    return base[:-2] + "/b" if base.endswith("/h") else ""
 
 
 @dataclass(frozen=True)
@@ -60,6 +70,15 @@ class Settings:
     # /health reports the worker dead after this long without a pass.
     worker_stale_s: int = 300
     max_eml_bytes: int = 10 * 1024 * 1024
+    # What POST /attest does when the request names no extract mode.
+    extract_default: str = "auto"
+    # Where /b/{name}.bin is reachable from the internet; "" means derived
+    # from blob_base_url (body_url below).
+    body_base_url: str = ""
+
+    @property
+    def body_url(self):
+        return self.body_base_url or body_base_from(self.blob_base_url)
 
     @property
     def db_path(self):
@@ -68,6 +87,10 @@ class Settings:
     @property
     def blob_dir(self):
         return self.data_dir / "blobs"
+
+    @property
+    def body_dir(self):
+        return self.data_dir / "bodies"
 
 
 def load(env=None):
@@ -89,6 +112,16 @@ def load(env=None):
     if not data_dir:
         raise ConfigError("LACRE_DATA_DIR must be set")
     key_file = env.get("LACRE_SIGNING_KEY_FILE", "").strip()
+    mode = env.get("LACRE_EXTRACT_DEFAULT", "").strip().lower() or "auto"
+    if mode not in EXTRACT_MODES:
+        raise ConfigError("LACRE_EXTRACT_DEFAULT must be one of %s" % (", ".join(EXTRACT_MODES),))
+    body_base = env.get("LACRE_BODY_BASE_URL", "").strip().rstrip("/") or body_base_from(base)
+    if not body_base:
+        raise ConfigError("LACRE_BODY_BASE_URL must be set when LACRE_BLOB_BASE_URL does "
+                          "not end in /h")
+    # The Extractors refuse any body URL that does not start with https://.
+    if not body_base.startswith("https://"):
+        raise ConfigError("LACRE_BODY_BASE_URL must start with https://")
     return Settings(
         network=network,
         router=router,
@@ -105,4 +138,6 @@ def load(env=None):
         confirm_retry_s=_int(env, "LACRE_CONFIRM_RETRY_S", 3600),
         worker_stale_s=_int(env, "LACRE_WORKER_STALE_S", 300),
         max_eml_bytes=_int(env, "LACRE_MAX_EML_BYTES", 10 * 1024 * 1024),
+        extract_default=mode,
+        body_base_url=body_base,
     )

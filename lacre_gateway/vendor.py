@@ -2,7 +2,8 @@
 
 Everything the gateway knows about the chain comes from there: the network
 table and the send path (tools/chain.py), the stored consensus state
-(tools/txstate.py), the confirmation decisions (tools/attest.py) and the
+(tools/txstate.py), the confirmation decisions (tools/attest.py), their
+Extractor variant and the Extractors' own checks (tools/extract.py) and the
 DKIM parsing the contracts themselves run (lacre/dkimcore.py). Nothing under
 vendor/lacre is edited; the tools directory is put on sys.path because the
 tools import each other by bare module name.
@@ -23,7 +24,8 @@ for path in (str(ROOT), str(TOOLS)):
 
 import attest  # noqa: E402
 import chain  # noqa: E402
+import extract  # noqa: E402
 import txstate  # noqa: E402
 from lacre import dkimbody, dkimcore  # noqa: E402
 
-__all__ = ["attest", "chain", "txstate", "dkimbody", "dkimcore", "ROOT"]
+__all__ = ["attest", "chain", "extract", "txstate", "dkimbody", "dkimcore", "ROOT"]

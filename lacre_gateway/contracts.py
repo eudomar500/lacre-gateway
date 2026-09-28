@@ -1,16 +1,26 @@
 """The Lacre contracts as the gateway reads them: always through the Router.
 
-No Verifier or KeyCache address is configured or cached. Each question
-resolves "verifier" or "keycache" on the Router at LATEST_FINAL first, as
-Verifier v1.2 itself does for the KeyCache, so a change applied on the
-Router after its 48 hour delay is followed without a restart.
+No Verifier, KeyCache or Extractor address is configured or cached. Each
+question resolves "verifier", "keycache", "extractor" or "extractor_llm" on
+the Router at LATEST_FINAL first, as Verifier v1.2 itself does for the
+KeyCache, so a change applied on the Router after its 48 hour delay is
+followed without a restart. A job keeps only the address its own call went
+to, because that is the contract whose records answer for the call.
 """
 
 import datetime
 
 from .chainio import ChainUnavailable
+from .vendor import extract
 
 STATES = ("active", "pending", "rotated", "retired")
+# The Router name of each extraction lane (tools/extract.py LANES).
+LANES = extract.LANES
+# What a job keeps of its extraction record: the fields that say what the
+# body said and how it was read. The rest (requester, bh, domain, times) is
+# on chain, and GET /extractions reads it there.
+EXTRACTION_FIELDS = ("match", "shipped", "eta_day", "eta_date", "order_id_found", "flagged",
+                     "method", "patterns_sha256", "prompt_sha256", "reason", "signed_at")
 
 
 def unix_time(text):
@@ -34,6 +44,18 @@ class Contracts:
 
     def verifier(self):
         return self.resolve("verifier")
+
+    def extractor(self, lane):
+        """The lane's Extractor, or "" when the Router names none."""
+        return str(self.chain.view(self.router, "resolve", [LANES[lane]], final=True) or "")
+
+    def has_patterns(self, extractor, domain):
+        # Read at LATEST_NONFINAL, as extract.refusal reads it: the document
+        # a call is checked against is the one in force when it executes.
+        return bool(self.chain.view(extractor, "patterns", [domain], final=False))
+
+    def extraction(self, extractor, record_id):
+        return self.chain.view(extractor, "get_record", [str(record_id)], final=True) or {}
 
     def keycache(self):
         return self.resolve("keycache")
