@@ -155,6 +155,12 @@ the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
 `/h/{token}` and the API paths only. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
 
+The same tunnel publishes `/b/{name}.bin` from Caddy on port 8091;
+`deploy/Caddyfile.example` is that site. It serves the bodies of extractions
+in flight from `/var/www/lacre`, with no API key. Each body is named with 32
+hex characters, is served until its extraction is FINALIZED, and is deleted
+afterwards.
+
 The account behind the key pays each attest's `fee()` and L2 gas, and must
 be able to receive GEN (refunds of refused and non-executed calls come back
 to it).

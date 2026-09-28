@@ -1,0 +1,11 @@
+# Serves the bodies of extractions in flight from /var/www/lacre at /b/,
+# reached through the cloudflared tunnel. Port 8091 because 8090 was
+# already taken on the VPS.
+:8091 {
+	bind 127.0.0.1
+	handle_path /b/* {
+		root * /var/www/lacre
+		header Cache-Control "no-store"
+		file_server
+	}
+}

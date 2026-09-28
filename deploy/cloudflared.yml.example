@@ -20,4 +20,9 @@ ingress:
   - hostname: lacre.in-sidr.xyz
     path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|senders/[^/]+/[^/]+|health)$
     service: http://127.0.0.1:8080
+  # The bodies of extractions in flight, served by Caddy. No API key: the
+  # validators fetch them from the URL in the extract calldata.
+  - hostname: lacre.in-sidr.xyz
+    path: ^/b/[a-f0-9]{32}\.bin$
+    service: http://127.0.0.1:8091
   - service: http_status:404
