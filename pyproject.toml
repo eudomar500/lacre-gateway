@@ -1,0 +1,25 @@
+# Packages lacre_mcp, the stdio MCP server, so that an agent host can run
+# `lacre-mcp` without a checkout of this repository. The gateway itself is
+# not packaged: it imports vendor/lacre from the checkout by path and is
+# installed with requirements.txt (see README, Deploy).
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lacre-mcp"
+version = "0.1.0"
+description = "The Lacre gateway API as MCP tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp==2.2.0",
+    "httpx==0.28.1",
+]
+
+[project.scripts]
+lacre-mcp = "lacre_mcp.__main__:main"
+
+[tool.setuptools]
+packages = ["lacre_mcp"]

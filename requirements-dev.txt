@@ -1,5 +1,4 @@
 -r requirements.txt
 pytest==9.0.3
-httpx==0.28.1
 # Signs the synthetic test message at test time; no key is kept in the repo.
 cryptography==50.0.1

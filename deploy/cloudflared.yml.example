@@ -16,9 +16,11 @@ ingress:
   - hostname: lacre.in-sidr.xyz
     path: ^/h/[A-Za-z0-9_-]{43}$
     service: http://127.0.0.1:8080
-  # The API. Every call carries X-API-Key; the gateway checks it.
+  # The API, and the MCP tools at /mcp. Every call carries X-API-Key; the
+  # gateway checks it. /mcp subpaths pass so that the gateway, which routes
+  # /mcp and /mcp/, answers the rest with its own 404.
   - hostname: lacre.in-sidr.xyz
-    path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|extractions/(patterns|llm)/[0-9]+|senders/[^/]+/[^/]+|mailboxes(/[a-z2-7]{12}(/jobs)?)?|health)$
+    path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|extractions/(patterns|llm)/[0-9]+|senders/[^/]+/[^/]+|mailboxes(/[a-z2-7]{12}(/jobs)?)?|health|mcp(/.*)?)$
     service: http://127.0.0.1:8080
   # Mail for mailboxes, posted by the Email Worker (deploy/worker). No API
   # key: the gateway checks the HMAC the Worker signs it with.

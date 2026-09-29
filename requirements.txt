@@ -4,3 +4,7 @@ uvicorn==0.48.0
 python-multipart==0.0.32
 # The version the public tools are written and tested against.
 genlayer-py==0.16.3
+# lacre_mcp: the MCP SDK (2.x names FastMCP MCPServer) and the client the
+# tools reach the API with, also inside the gateway at /mcp.
+mcp==2.2.0
+httpx==0.28.1

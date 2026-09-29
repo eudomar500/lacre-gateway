@@ -9,6 +9,9 @@ and they serve nothing once the call is over.
 POST /inbound takes no API key either. Only the Cloudflare Email Worker
 calls it, and it authenticates with an HMAC over the delivery made with
 LACRE_INBOUND_SECRET, which no agent holds (see inbound_mac).
+
+/mcp serves the lacre_mcp tools over streamable HTTP, behind the same key
+check as the API (see McpEndpoint).
 """
 
 import datetime
@@ -17,8 +20,14 @@ import hmac
 import logging
 import re
 
+import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
+from mcp.server.transport_security import TransportSecuritySettings
+from starlette.routing import Route
+
+from lacre_mcp.gateway import Gateway
+from lacre_mcp.server import build_server
 
 from . import headers
 from .blobs import BODY, BlobStore
@@ -123,23 +132,79 @@ def iso(seconds):
         .strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def known_key(settings, given):
+    """The configured key equal to given, or None."""
+    matched = None
+    for key in settings.api_keys:
+        # Every key is compared, so timing does not tell which one is near.
+        if hmac.compare_digest(given.encode(), key.encode()):
+            matched = key
+    return matched if given else None
+
+
+class McpEndpoint:
+    """/mcp: the key check of the API, then the MCP session manager.
+
+    The tools reach the API through the app itself, in process, with the
+    key of the request they answer, so a key sees over MCP exactly what it
+    sees over REST and a remote agent needs nothing configured but its key.
+    """
+
+    def __init__(self, settings, session_manager):
+        self.settings = settings
+        self.session_manager = session_manager
+
+    async def __call__(self, scope, receive, send):
+        given = Request(scope).headers.get(API_KEY_HEADER, "")
+        if known_key(self.settings, given) is None:
+            response = JSONResponse(status_code=401,
+                                    content={"detail": "missing or unknown API key"})
+            await response(scope, receive, send)
+            return
+        await self.session_manager.handle_request(scope, receive, send)
+
+
 def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodies=None):
     import time
 
     clock = clock or time.time
     bodies = bodies or BlobStore(settings.body_dir, settings.body_url, BODY)
-    app = FastAPI(title="Lacre gateway", docs_url=None, redoc_url=None, openapi_url=None)
+
+    def in_process(ctx):
+        # McpEndpoint has checked this key; the API checks it again on every
+        # call the tool makes.
+        given = (ctx.headers or {}).get(API_KEY_HEADER, "")
+        return Gateway("http://gateway", given,
+                       transport=httpx.ASGITransport(app=app, raise_app_exceptions=False))
+
+    mcp = build_server(in_process)
+    mcp.streamable_http_app(
+        streamable_http_path="/mcp",
+        # No session state: each request carries its key, and a long
+        # lacre_wait_job holds only its own request open.
+        stateless_http=True,
+        # The Host is lacre.in-sidr.xyz behind the tunnel. Rebinding
+        # protection guards servers that answer without credentials; this
+        # one answers nothing without X-API-Key, which a page in a browser
+        # cannot send to another origin.
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        # A message as base64 inside JSON is about 4/3 of its size.
+        max_request_body_size=2 * settings.max_eml_bytes + 65536)
+    session_manager = mcp.session_manager
+
+    app = FastAPI(title="Lacre gateway", docs_url=None, redoc_url=None, openapi_url=None,
+                  lifespan=lambda app: session_manager.run())
+    endpoint = McpEndpoint(settings, session_manager)
+    # Both spellings are routed so that neither is answered with a redirect,
+    # which some MCP clients do not follow on POST.
+    app.router.routes.append(Route("/mcp", endpoint=endpoint, name="mcp"))
+    app.router.routes.append(Route("/mcp/", endpoint=endpoint, name="mcp_slash"))
     chain = contracts.chain
 
     def require_key(request: Request):
         """The owner digest of the caller's key, or 401."""
-        given = request.headers.get(API_KEY_HEADER, "")
-        matched = None
-        for key in settings.api_keys:
-            # Every key is compared, so timing does not tell which one is near.
-            if hmac.compare_digest(given.encode(), key.encode()):
-                matched = key
-        if not given or matched is None:
+        matched = known_key(settings, request.headers.get(API_KEY_HEADER, ""))
+        if matched is None:
             raise HTTPException(status_code=401, detail="missing or unknown API key")
         return owner_of(matched)
 

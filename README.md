@@ -158,6 +158,9 @@ Every endpoint takes the API key in `X-API-Key`, except `POST /inbound`
 no key: they serve the headers of an attest call and the body of an extract
 call in flight to the validators, from the URL in the call.
 
+`/mcp` is the MCP transport for these same endpoints, with the same key
+(see [MCP](#mcp)).
+
 The `extraction` object of a job: `requested` (the mode), `status`
 (`waiting for the attestation`, `in progress`, `extracted`, `no match`,
 `refused`, `failed`, `skipped`, or `not run` when the attestation itself
@@ -277,6 +280,114 @@ nothing of the message but what an uploaded job keeps is written to the
 database. Create a mailbox with `extract=none` for mail whose body must
 not go to the validators.
 
+## MCP
+
+`lacre_mcp` gives an agent the API as MCP tools, so it does not have to
+read this document to use it. It is a thin client of the REST API above:
+every tool is one request (`lacre_wait_job` is a loop of them), with the
+same key, the same answers and the same errors. A 4xx or 5xx from the
+gateway, or a gateway that cannot be reached, is a tool error carrying the
+gateway's `detail`; the server goes on. The message and the key are never
+logged.
+
+| tool | request |
+|------|---------|
+| `lacre_attest(eml, extract="auto")` | `POST /attest`. `eml` is the raw RFC 5322 message as text, or its base64 when it is not text that starts with a header field. Text with no CR is sent with each LF made CRLF; base64 is sent byte for byte. |
+| `lacre_job(job_id)` | `GET /jobs/{id}` |
+| `lacre_wait_job(job_id, timeout_s=3600)` | `GET /jobs/{id}` every 30 s until `finalized`, `refused` or `failed`, or the timeout; returns the last read. 5xx and network errors are retried until the timeout, a 4xx ends it. |
+| `lacre_record(record_id, verifier=None)` | `GET /records/{id}` |
+| `lacre_extraction(lane, record_id)` | `GET /extractions/{lane}/{id}` |
+| `lacre_sender(domain, selector)` | `GET /senders/{domain}/{selector}` |
+| `lacre_health()` | `GET /health`, with `ok`: a 503 here is the answer "not every check holds", not an error |
+| `lacre_mailbox_create(extract="auto")` | `POST /mailboxes` |
+| `lacre_mailboxes()` | `GET /mailboxes` |
+| `lacre_mailbox(mailbox_id)` | `GET /mailboxes/{id}` |
+| `lacre_mailbox_jobs(mailbox_id, limit=20, offset=0)` | `GET /mailboxes/{id}/jobs` |
+| `lacre_mailbox_disable(mailbox_id)` | `DELETE /mailboxes/{id}` |
+
+The tools send `extract` explicitly, `auto` unless told otherwise, so
+`LACRE_EXTRACT_DEFAULT` does not apply to them. Each argument that goes into
+a path is quoted as one segment, so no argument reaches another endpoint.
+
+The same rules as for the API hold, and the tool descriptions state them:
+a job stub is not proof; a job is provisional until its `status` is
+`finalized`, `refused` or `failed`; a record is final only when its job is
+`finalized`, means the check ran and not that it passed
+(`valid_and_aligned`), and means nothing without its `verifier`. A consumer
+decides on the record with `check_for` on the Verifier, reads the key
+status at decision time (`lacre_sender`), gates an extraction on `match`
+true and `reason` `extracted`, reads `eta_date` and `order_id_found` only
+when `method` is `patterns`, and pins the digest it reviewed.
+
+An on-chain step takes about 35 minutes, and a sender the gateway has not
+seen before waits 24 hours in quarantine before its first attestation is
+sent. `lacre_wait_job` can therefore run for as long as `timeout_s`; the
+host's own tool-call timeout has to be longer, or the agent should wait in
+shorter calls.
+
+### Local, over stdio
+
+```
+pip install -e .                  # in a checkout; installs lacre-mcp
+lacre-mcp --list-tools            # prints the tool names and exits
+```
+
+`lacre-mcp` (or `python -m lacre_mcp`) serves the tools over stdio. It reads
+`LACRE_GATEWAY_URL` (default `https://lacre.in-sidr.xyz`) and `LACRE_API_KEY`
+from its environment. It needs only `mcp` and `httpx`, not the gateway's
+dependencies or the submodule.
+
+Any MCP host that launches a stdio server takes it as a command, its
+arguments and its environment:
+
+```
+{
+  "mcpServers": {
+    "lacre": {
+      "command": "lacre-mcp",
+      "args": [],
+      "env": {
+        "LACRE_GATEWAY_URL": "https://lacre.in-sidr.xyz",
+        "LACRE_API_KEY": "<your key>"
+      }
+    }
+  }
+}
+```
+
+Without the console script on the host's PATH, use the interpreter that has
+the package: `"command": "/path/to/.venv/bin/python", "args": ["-m",
+"lacre_mcp"]`.
+
+### Remote, over streamable HTTP
+
+The gateway serves the same tools at `https://lacre.in-sidr.xyz/mcp`
+(streamable HTTP, stateless). A request without a known key in `X-API-Key`
+is answered 401, as the API answers it. The tools act with the key of the
+request they answer, so a remote agent configures nothing but the URL and
+its key, and a key sees over MCP exactly what it sees over REST: its own
+mailboxes and nothing of another key's. Any MCP host that speaks streamable
+HTTP with a custom header takes it as:
+
+```
+{
+  "mcpServers": {
+    "lacre": {
+      "type": "http",
+      "url": "https://lacre.in-sidr.xyz/mcp",
+      "headers": {"X-API-Key": "<your key>"}
+    }
+  }
+}
+```
+
+Inside the gateway the tools call the API in process, not over the network,
+so `/mcp` works whatever the tunnel publishes and adds no configuration.
+DNS rebinding protection is off at `/mcp`: it guards servers that answer
+without credentials, and the Host behind the tunnel is the public name. A
+long `lacre_wait_job` keeps its request open; the SDK sends an SSE ping
+every 15 seconds, which keeps the tunnel from closing it as idle.
+
 ## Run locally against the fixtures
 
 ```
@@ -332,7 +443,7 @@ systemctl daemon-reload && systemctl enable --now lacre-gateway
 
 The service listens on 127.0.0.1:8080. `deploy/cloudflared.yml.example` is
 the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
-`/h/{token}`, `/b/{name}.bin`, `/inbound` and the API paths only. Check with
+`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths and `/mcp` only. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
 
 Mailboxes need `LACRE_INBOUND_SECRET` in `gateway.env` and the Email
@@ -360,7 +471,7 @@ gateway's is in flight there. An Extractor's slot is held for the whole
 extraction, from serving the body until the job ends, because
 `last_refusal` is per wallet and the confirmation must not read another
 job's refusal as its own. Extractions therefore go out one at a time per
-lane, each taking at least one finalization (about 30 minutes on
+lane, each taking at least one finalization (about 35 minutes on
 Bradbury).
 
 To update the public tools, move the submodule to a new commit of
@@ -386,5 +497,4 @@ they do to attest calls. No Extractor address is configured: `extractor` and
 ## Out of scope
 
 - Billing, accounts and quotas beyond static API keys.
-- An MCP server.
 - A web front end.
