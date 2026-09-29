@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lacre &middot; Docs</title>
+<meta name="description" content="The Lacre API endpoints and MCP tools.">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body data-page="docs">
+
+<header class="nav">
+  <a class="logo" href="/"><span class="logo-knob"></span><span class="logo-word">LACRE</span></a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html" aria-current="page">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a class="nav-access" href="/access.html">Access</a>
+  </nav>
+  <button class="nav-menu" type="button" aria-label="Menu" aria-expanded="false">
+    <svg class="ic ic-open" viewBox="0 0 256 256" aria-hidden="true"><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="192" x2="216" y2="192"/></svg>
+    <svg class="ic ic-close" viewBox="0 0 256 256" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>
+  </button>
+  <div class="nav-drop">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html" aria-current="page">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a href="/access.html">Access</a>
+  </div>
+</header>
+
+<main>
+  <div class="rule">
+    <span class="lt lt-9 provisional"></span>
+    <span class="rule-t">A job is not proof. The record on chain is, and only once its status is <span class="mono">finalized</span> &mdash; about 35 min per on-chain step, up to 24 h the first time a sender domain is seen.</span>
+  </div>
+  <div class="docs">
+    <section class="docs-col" aria-label="Endpoints">
+      <div class="docs-h"><h1 class="eyebrow">ENDPOINTS</h1><span class="line"></span></div>
+      <button class="base" type="button" title="Copy" data-copy="https://lacre.in-sidr.xyz"><span class="base-k">BASE</span><span class="base-v">https://lacre.in-sidr.xyz</span><span class="base-t">X-API-Key</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+      <div class="list">
+        <button class="li" type="button" title="Copy" data-copy="POST https://lacre.in-sidr.xyz/attest"><span class="li-m">POST</span><span class="li-p">/attest</span><span class="li-d">eml &middot; extract=none|patterns|llm|auto</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/jobs/{id}"><span class="li-m">GET</span><span class="li-p">/jobs/{id}</span><span class="li-d">Stage and estimate</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/records/{id}"><span class="li-m">GET</span><span class="li-p">/records/{id}</span><span class="li-d">On-chain record</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/extractions/{lane}/{id}"><span class="li-m">GET</span><span class="li-p">/extractions/{lane}/{id}</span><span class="li-d">lane: patterns | llm</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/senders/{domain}/{selector}"><span class="li-m">GET</span><span class="li-p">/senders/{domain}/{selector}</span><span class="li-d">Sender key</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/account"><span class="li-m">GET</span><span class="li-p">/account</span><span class="li-d">Balance, prices, counts</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="POST https://lacre.in-sidr.xyz/account/rotate-key"><span class="li-m">POST</span><span class="li-p">/account/rotate-key</span><span class="li-d">New API key</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="POST https://lacre.in-sidr.xyz/mailboxes"><span class="li-m">POST</span><span class="li-p">/mailboxes</span><span class="li-d">Create</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/mailboxes"><span class="li-m">GET</span><span class="li-p">/mailboxes</span><span class="li-d">List</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/mailboxes/{id}"><span class="li-m">GET</span><span class="li-p">/mailboxes/{id}</span><span class="li-d">One mailbox</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="DELETE https://lacre.in-sidr.xyz/mailboxes/{id}"><span class="li-m">DELETE</span><span class="li-p">/mailboxes/{id}</span><span class="li-d">Disable</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/mailboxes/{id}/jobs"><span class="li-m">GET</span><span class="li-p">/mailboxes/{id}/jobs</span><span class="li-d">Jobs from mailbox</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="GET https://lacre.in-sidr.xyz/health"><span class="li-m">GET</span><span class="li-p">/health</span><span class="li-d">Service status</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+      </div>
+      <div class="sample">
+        <div class="sample-h">RESPONSE &middot; GET /records/{id}</div>
+        <pre id="docResp">{
+  &quot;verifier&quot;: &quot;0x&hellip;&quot;,
+  &quot;current_verifier&quot;: true,
+  &quot;record_id&quot;: &quot;1&quot;,
+  &quot;read_at&quot;: &quot;LATEST_FINAL&quot;,
+  &quot;valid_and_aligned&quot;: true,
+  &quot;record&quot;: {
+    &quot;domain&quot;: &quot;amazon.com&quot;,
+    &quot;from_domain&quot;: &quot;amazon.com&quot;,
+    &quot;valid&quot;: true,
+    &quot;aligned&quot;: true,
+    &quot;reason&quot;: &quot;header signature verified&quot;
+  },
+  &quot;extractions&quot;: [
+    {
+      &quot;lane&quot;: &quot;patterns&quot;,
+      &quot;id&quot;: &quot;1&quot;,
+      &quot;record&quot;: {
+        &quot;match&quot;: true,
+        &quot;reason&quot;: &quot;extracted&quot;,
+        &quot;shipped&quot;: true,
+        &quot;eta_day&quot;: &quot;miercoles&quot;,
+        &quot;order_id_found&quot;: true
+      }
+    }
+  ]
+}</pre>
+        <button class="code-copy" type="button" title="Copy" data-copy-from="docResp"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+      </div>
+    </section>
+    <section class="docs-col" aria-label="MCP tools">
+      <div class="docs-h"><h2 class="eyebrow">MCP TOOLS</h2><span class="line"></span></div>
+      <button class="base" type="button" title="Copy" data-copy="https://lacre.in-sidr.xyz/mcp"><span class="base-k">URL</span><span class="base-v">https://lacre.in-sidr.xyz/mcp</span><span class="base-t">streamable HTTP</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+      <div class="list">
+        <button class="li" type="button" title="Copy" data-copy="lacre_attest"><span class="li-p">lacre_attest</span><span class="li-a">(eml, extract?)</span><span class="li-d">Start a job</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_job"><span class="li-p">lacre_job</span><span class="li-a">(id)</span><span class="li-d">Stage</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_wait_job"><span class="li-p">lacre_wait_job</span><span class="li-a">(id)</span><span class="li-d">Block until done</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_record"><span class="li-p">lacre_record</span><span class="li-a">(id)</span><span class="li-d">On-chain record</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_extraction"><span class="li-p">lacre_extraction</span><span class="li-a">(lane, id)</span><span class="li-d">Extracted fields</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_sender"><span class="li-p">lacre_sender</span><span class="li-a">(domain, selector)</span><span class="li-d">Sender key</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_health"><span class="li-p">lacre_health</span><span class="li-a">()</span><span class="li-d">Status</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_account"><span class="li-p">lacre_account</span><span class="li-a">()</span><span class="li-d">Balance, prices</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_mailbox_create"><span class="li-p">lacre_mailbox_create</span><span class="li-a">()</span><span class="li-d">New address</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_mailboxes"><span class="li-p">lacre_mailboxes</span><span class="li-a">()</span><span class="li-d">List</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_mailbox"><span class="li-p">lacre_mailbox</span><span class="li-a">(id)</span><span class="li-d">One mailbox</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_mailbox_jobs"><span class="li-p">lacre_mailbox_jobs</span><span class="li-a">(id)</span><span class="li-d">Jobs from mailbox</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+        <button class="li" type="button" title="Copy" data-copy="lacre_mailbox_disable"><span class="li-p">lacre_mailbox_disable</span><span class="li-a">(id)</span><span class="li-d">Disable</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+      </div>
+      <div class="sample">
+        <div class="sample-h">CLIENT CONFIG</div>
+        <pre id="docCfg">{
+  &quot;mcpServers&quot;: {
+    &quot;lacre&quot;: {
+      &quot;type&quot;: &quot;http&quot;,
+      &quot;url&quot;: &quot;https://lacre.in-sidr.xyz/mcp&quot;,
+      &quot;headers&quot;: { &quot;X-API-Key&quot;: &quot;YOUR_KEY&quot; }
+    }
+  }
+}</pre>
+        <button class="code-copy" type="button" title="Copy" data-copy-from="docCfg"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+      </div>
+    </section>
+  </div>
+</main>
+
+</body>
+</html>

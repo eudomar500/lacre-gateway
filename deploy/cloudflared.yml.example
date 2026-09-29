@@ -22,12 +22,18 @@ ingress:
   - hostname: lacre.in-sidr.xyz
     path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|extractions/(patterns|llm)/[0-9]+|senders/[^/]+/[^/]+|mailboxes(/[a-z2-7]{12}(/jobs)?)?|account(/rotate-key)?|health|mcp(/.*)?)$
     service: http://127.0.0.1:8080
+  # The web app and its access form. No API key: the pages and /static are
+  # the same for everyone and every call they make carries the visitor's
+  # key; /access-request is rate limited per address by the gateway.
+  - hostname: lacre.in-sidr.xyz
+    path: ^/((how|docs|why|mcp|access)\.html|static/.+|access-request)?$
+    service: http://127.0.0.1:8080
   # The admin API creates accounts and credits them. It is meant for
   # localhost (curl on the VPS against 127.0.0.1:8080), so it is not routed
   # here. Uncomment only with a Cloudflare Access application in front of
   # these paths; X-Admin-Token alone should not face the internet.
   # - hostname: lacre.in-sidr.xyz
-  #   path: ^/admin/accounts(/[a-z2-7]{12}(/(topups|disable|enable))?)?$
+  #   path: ^/admin/(accounts(/[a-z2-7]{12}(/(topups|disable|enable))?)?|access-requests)$
   #   service: http://127.0.0.1:8080
   # Mail for mailboxes, posted by the Email Worker (deploy/worker). No API
   # key: the gateway checks the HMAC the Worker signs it with.

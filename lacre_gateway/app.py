@@ -16,6 +16,11 @@ check as the API (see McpEndpoint).
 Every API key is an account (accounts.py). /admin/* manages accounts and
 takes LACRE_ADMIN_TOKEN in X-Admin-Token, never an API key, so a leaked
 API key cannot mint credits or read other accounts.
+
+The web app (web.py) is served at / and /static with no key: its files are
+the same for everyone, and every call it makes carries the visitor's key.
+POST /access-request takes no key either, since whoever uses it has none;
+it is rate limited per address and stores only what the form asks for.
 """
 
 import datetime
@@ -42,6 +47,7 @@ from .contracts import LANES, confirm_after, sender_state
 from .store import InsufficientCredits, TopUpConflict
 from .topups import ManualTopUp
 from .vendor import attest
+from .web import WEB_DIR, AccessRequest, RateLimit, add_pages, client_address
 
 log = logging.getLogger("lacre_gateway.app")
 
@@ -234,13 +240,20 @@ class McpEndpoint:
         await self.session_manager.handle_request(scope, receive, send)
 
 
-def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodies=None):
+def access_view(row):
+    return {"id": row["id"], "name": row["name"], "email": row["email"], "what": row["what"],
+            "created_at": iso(row["created_at"])}
+
+
+def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodies=None,
+               web_dir=WEB_DIR):
     import time
 
     clock = clock or time.time
     bodies = bodies or BlobStore(settings.body_dir, settings.body_url, BODY)
     accounts.bootstrap(store, settings.api_keys, settings.bootstrap_credits)
     manual = ManualTopUp(store)
+    access_limit = RateLimit(clock)
 
     def in_process(ctx):
         # McpEndpoint has checked this key; the API checks it again on every
@@ -621,6 +634,32 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         log.info("account %s enabled", row["id"])
         return admin_view(store.account(row["id"]))
 
+    @app.get("/admin/access-requests", dependencies=[Depends(require_admin)])
+    def admin_access_requests(limit: int = Query(50, ge=1, le=LEDGER_MAX),
+                              offset: int = Query(0, ge=0)):
+        rows = store.access_requests(limit + 1, offset)
+        more = len(rows) > limit
+        return {
+            "access_requests": [access_view(r) for r in rows[:limit]],
+            "limit": limit,
+            "offset": offset,
+            "next": ("/admin/access-requests?limit=%d&offset=%d" % (limit, offset + limit)
+                     if more else None),
+        }
+
+    # ---- the web app -------------------------------------------------------------
+
+    @app.post("/access-request", status_code=201)
+    def post_access_request(new: AccessRequest, request: Request):
+        # Counted after validation, so a visitor fixing a typo in the form
+        # does not spend the requests a real one needs.
+        if not access_limit.allow(client_address(request)):
+            raise HTTPException(status_code=429, detail="too many requests, try again later")
+        row = store.add_access_request(new.name, new.email, new.what)
+        # The id only: the log never holds what a visitor typed.
+        log.info("access request %d", row["id"])
+        return {"status": "received"}
+
     @app.get("/records/{record_id}", dependencies=[Depends(require_key)])
     def get_record(record_id: str, verifier: str | None = None):
         if not record_id.isdigit():
@@ -723,8 +762,31 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         body = dict(checks, signer="configured" if chain.can_sign else "absent",
                     network=settings.network, last_worker_pass=iso(beat),
                     inbound="configured" if settings.inbound_secret else "off",
-                    inbound_unknown_dropped=store.unknown_inbound())
+                    inbound_unknown_dropped=store.unknown_inbound(),
+                    layers=layers(checks["chain"]))
+        # The layers are reported, not required: a Router that names no
+        # Extractor is a deployment choice, and attesting still works.
         return JSONResponse(status_code=200 if all(checks.values()) else 503, content=body)
+
+    def layers(chain_up):
+        """Which contract the Router resolves now, each on its own, for the
+        readout of the web app."""
+        def resolves(read):
+            if not chain_up:
+                return False
+            try:
+                return bool(read())
+            except ChainUnavailable:
+                return False
+        verifier = resolves(contracts.verifier)
+        keycache = resolves(contracts.keycache)
+        return {
+            "router": verifier or keycache,
+            "keycache": keycache,
+            "verifier": verifier,
+            "extractor_patterns": resolves(lambda: contracts.extractor("patterns")),
+            "extractor_llm": resolves(lambda: contracts.extractor("llm")),
+        }
 
     @app.get("/h/{token}")
     def served_headers(token: str):
@@ -744,4 +806,5 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         return Response(content=body, media_type="application/octet-stream",
                         headers={"Cache-Control": "no-store"})
 
+    add_pages(app, web_dir)
     return app

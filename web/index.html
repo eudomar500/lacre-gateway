@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lacre</title>
+<meta name="description" content="Attest a signed email on GenLayer and read what it says, agreed by consensus.">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body class="app" data-page="app">
+
+<header class="nav">
+  <a class="logo" href="/"><span class="logo-knob"></span><span class="logo-word">LACRE</span></a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a class="nav-access" href="/access.html">Access</a>
+  </nav>
+  <button class="nav-menu" type="button" aria-label="Menu" aria-expanded="false">
+    <svg class="ic ic-open" viewBox="0 0 256 256" aria-hidden="true"><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="192" x2="216" y2="192"/></svg>
+    <svg class="ic ic-close" viewBox="0 0 256 256" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>
+  </button>
+  <div class="nav-drop">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a href="/access.html">Access</a>
+  </div>
+</header>
+
+<main class="main">
+
+  <aside class="side" id="side">
+    <button class="side-toggle" id="sideToggle" type="button" title="Collapse" aria-expanded="true" aria-controls="side">
+      <svg class="ic ic-left" viewBox="0 0 256 256" aria-hidden="true"><polyline points="160 208 80 128 160 48"/></svg>
+      <svg class="ic ic-right" viewBox="0 0 256 256" aria-hidden="true"><polyline points="96 48 176 128 96 208"/></svg>
+    </button>
+    <div class="side-full">
+      <div class="side-h">READOUTS</div>
+      <div class="side-sect">
+        <div class="label">NETWORK</div>
+        <div class="net">
+          <span class="lt off" data-net></span>
+          <span class="net-name" data-net-name>Bradbury</span>
+          <span class="fill"></span>
+          <span class="net-tag">TESTNET</span>
+        </div>
+      </div>
+      <div class="side-sect">
+        <div class="label">CONTRACT LAYERS</div>
+        <div class="layer" data-layer="router"><span class="lt off"></span><span class="layer-no">01</span><span class="layer-nm">Router</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+        <div class="layer" data-layer="keycache"><span class="lt off"></span><span class="layer-no">02</span><span class="layer-nm">Key cache</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+        <div class="layer" data-layer="verifier"><span class="lt off"></span><span class="layer-no">03</span><span class="layer-nm">Verifier</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+        <div class="layer" data-layer="extractor_patterns"><span class="lt off"></span><span class="layer-no">04</span><span class="layer-nm">Extractor (patterns)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+        <div class="layer" data-layer="extractor_llm"><span class="lt off"></span><span class="layer-no">05</span><span class="layer-nm">Extractor (LLM)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+      </div>
+      <div class="side-sect tight">
+        <div class="label">PRICES &middot; CREDITS</div>
+        <div class="kv"><span>Attest</span><span class="fill"></span><span class="v" data-price="attest">&mdash;</span></div>
+        <div class="kv"><span>Extract</span><span class="fill"></span><span class="v" data-price="extract">&mdash;</span></div>
+      </div>
+      <div class="side-sect tight">
+        <div class="label">JOBS</div>
+        <div class="kv"><span>Open</span><span class="fill"></span><span class="v" data-count="open">&mdash;</span></div>
+        <div class="kv"><span>Finalized</span><span class="fill"></span><span class="v" data-count="finalized">&mdash;</span></div>
+        <div class="kv"><span>Refused</span><span class="fill"></span><span class="v" data-count="refused">&mdash;</span></div>
+        <div class="kv"><span>Failed</span><span class="fill"></span><span class="v" data-count="failed">&mdash;</span></div>
+        <div class="kv"><span>Mailboxes</span><span class="fill"></span><span class="v" data-count="mailboxes">&mdash;</span></div>
+      </div>
+      <div class="side-sect tight top">
+        <div class="label">BALANCE</div>
+        <div class="balance" id="balance" hidden><span class="balance-n" id="balanceN"></span><span class="balance-u">CR</span></div>
+        <div class="balance-none" id="balanceNone"><span class="balance-n">&mdash;</span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><circle cx="164" cy="92" r="52"/><line x1="127" y1="129" x2="40" y2="216"/><line x1="64" y1="192" x2="88" y2="216"/><line x1="92" y1="164" x2="116" y2="188"/></svg></div>
+      </div>
+    </div>
+    <div class="side-mini" aria-hidden="true">
+      <span class="lt off" data-net></span>
+      <span class="sep"></span>
+      <span class="lt off" data-layer-lt="router"></span>
+      <span class="lt off" data-layer-lt="keycache"></span>
+      <span class="lt off" data-layer-lt="verifier"></span>
+      <span class="lt off" data-layer-lt="extractor_patterns"></span>
+      <span class="lt off" data-layer-lt="extractor_llm"></span>
+    </div>
+  </aside>
+
+  <button class="mstrip" id="mstrip" type="button" aria-expanded="false" aria-controls="minfo">
+    <span class="lt off" data-net></span>
+    <span class="mstrip-net" data-net-upper>BRADBURY</span>
+    <span class="mstrip-dots">
+      <span class="lt lt-6 off" data-base="lt lt-6" data-layer-lt="router"></span>
+      <span class="lt lt-6 off" data-base="lt lt-6" data-layer-lt="keycache"></span>
+      <span class="lt lt-6 off" data-base="lt lt-6" data-layer-lt="verifier"></span>
+      <span class="lt lt-6 off" data-base="lt lt-6" data-layer-lt="extractor_patterns"></span>
+      <span class="lt lt-6 off" data-base="lt lt-6" data-layer-lt="extractor_llm"></span>
+    </span>
+    <span class="fill"></span>
+    <span class="mstrip-bal" id="mBal">&mdash; cr</span>
+    <svg class="ic ic-down" viewBox="0 0 256 256" aria-hidden="true"><polyline points="208 96 128 176 48 96"/></svg>
+    <svg class="ic ic-up" viewBox="0 0 256 256" aria-hidden="true"><polyline points="48 160 128 80 208 160"/></svg>
+  </button>
+  <div class="minfo" id="minfo">
+    <div class="layer" data-layer="router"><span class="layer-no">01</span><span class="layer-nm">Router</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+    <div class="layer" data-layer="keycache"><span class="layer-no">02</span><span class="layer-nm">Key cache</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+    <div class="layer" data-layer="verifier"><span class="layer-no">03</span><span class="layer-nm">Verifier</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+    <div class="layer" data-layer="extractor_patterns"><span class="layer-no">04</span><span class="layer-nm">Extractor (patterns)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+    <div class="layer" data-layer="extractor_llm"><span class="layer-no">05</span><span class="layer-nm">Extractor (LLM)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+    <div class="minfo-foot" id="mPrices"><span>attest &mdash; cr</span><span>extract &mdash; cr</span></div>
+  </div>
+
+  <div class="stagearea" id="stagearea">
+    <div class="disk-wrap">
+      <div class="disk" id="disk" role="img" aria-label="Job progress"></div>
+      <div class="readout" aria-live="polite">
+        <div class="readout-line">
+          <span class="stage-num" id="stageNum">00 / 07</span>
+          <span class="stage-dash"></span>
+          <span class="stage-name" id="stageName">Idle</span>
+        </div>
+        <div class="stage-eta" id="stageEta">Drop a signed .eml</div>
+        <div class="ticks" id="ticks"></div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <section class="card card-in" id="cardIn" aria-label="Input">
+        <div class="card-head">
+          <span class="lt idle" id="inLt"></span>
+          <span class="card-title">INPUT</span>
+          <span class="card-sum" id="inSum"></span>
+          <button class="btn-sm" id="btnNew" type="button" hidden>
+            <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="24 56 24 104 72 104"/><path d="M67.6 192A88 88 0 1 0 65.8 65.8L24 104"/></svg>NEW
+          </button>
+        </div>
+        <div class="card-body" id="cardBody">
+          <div class="tabs" role="tablist">
+            <button class="tab" id="tabFile" type="button" role="tab" aria-selected="true" data-tab="file">FILE</button>
+            <button class="tab" id="tabPaste" type="button" role="tab" aria-selected="false" data-tab="paste">PASTE</button>
+          </div>
+          <button class="drop" id="drop" type="button" aria-label="Choose or drop a .eml file">
+            <span class="drop-empty" id="dropEmpty">
+              <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><rect x="40" y="40" width="176" height="176" rx="8"/><path d="M40 152h36.7a8 8 0 0 1 5.6 2.3l19.4 19.4a8 8 0 0 0 5.6 2.3h41.4a8 8 0 0 0 5.6-2.3l19.4-19.4a8 8 0 0 1 5.6-2.3H216"/><line x1="128" y1="72" x2="128" y2="128"/><polyline points="100 104 128 132 156 104"/></svg>
+              <span class="drop-label">DROP .EML</span>
+            </span>
+            <span class="drop-has" id="dropHas" hidden>
+              <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><rect x="32" y="56" width="192" height="144" rx="8"/><polyline points="224 56 128 144 32 56"/></svg>
+              <span class="drop-name" id="emlName"></span>
+              <span class="drop-size" id="emlSize"></span>
+            </span>
+          </button>
+          <textarea class="paste" id="paste" placeholder="Raw message source" spellcheck="false" hidden></textarea>
+          <input type="file" id="file" accept=".eml,message/rfc822" hidden>
+          <div class="field">
+            <label class="label" for="key">API KEY</label>
+            <div class="box">
+              <input type="password" id="key" placeholder="API key" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <button class="ibtn" id="pasteKey" type="button" title="Paste" aria-label="Paste the API key">
+                <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><line x1="96" y1="152" x2="160" y2="152"/><line x1="96" y1="120" x2="160" y2="120"/><path d="M160 40h40a8 8 0 0 1 8 8v168a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V48a8 8 0 0 1 8-8h40"/><path d="M88 72V64a40 40 0 0 1 80 0v8Z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">EXTRACTION</span>
+            <div class="pills" role="group" aria-label="Extraction">
+              <button class="pill" type="button" data-mode="auto" aria-pressed="true">auto</button>
+              <button class="pill" type="button" data-mode="patterns" aria-pressed="false">patterns</button>
+              <button class="pill" type="button" data-mode="llm" aria-pressed="false">llm</button>
+              <button class="pill" type="button" data-mode="none" aria-pressed="false">none</button>
+            </div>
+          </div>
+          <button class="btn-main" id="attest" type="button" disabled><span class="lt lt-7 idle"></span>ATTEST</button>
+          <div class="field">
+            <label class="label" for="resume">RESUME</label>
+            <div class="box">
+              <input type="text" id="resume" placeholder="job id" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32">
+              <button class="btn-sm" id="follow" type="button">FOLLOW</button>
+            </div>
+          </div>
+          <div class="msg" id="inMsg" role="status"></div>
+        </div>
+      </section>
+
+      <section class="card card-out" id="cardOut" aria-label="Attestation">
+        <div class="out-head">
+          <span class="lt final" id="outLt" hidden></span>
+          <span class="card-title">ATTESTATION</span>
+          <span class="fill"></span>
+          <span class="tag-prov" id="outProv">PROVISIONAL</span>
+          <span class="tag-final" id="outFinal" hidden>FINALIZED</span>
+        </div>
+        <div class="orow"><span class="orow-k">Job id</span><span class="orow-v" id="oJob"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="job"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
+        <div class="orow"><span class="orow-k">Sender domain</span><span class="orow-v" id="oDom"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="dom"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
+        <div class="orow"><span class="orow-k">Record id</span><span class="orow-v" id="oRec"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="rec"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
+        <div class="orow"><span class="orow-k">Consensus tx</span><span class="orow-v" id="oTx"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="tx"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" id="oTxLink" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+        <div class="checks">
+          <div class="check"><span class="lt provisional" id="ckValid"></span>VALID</div>
+          <div class="check"><span class="lt provisional" id="ckAligned"></span>ALIGNED</div>
+        </div>
+        <div class="ex" id="ex" hidden>
+          <div class="ex-h"><span class="label">EXTRACTED</span><span class="fill"></span><span class="ex-note" id="exNote"></span></div>
+          <div id="exRows"></div>
+        </div>
+      </section>
+
+      <div class="plug-slot">
+        <div class="plug" id="plug">
+          <button class="plug-closed" id="plugClosed" type="button" aria-label="Open the plugin" aria-expanded="false" aria-controls="plugInner">
+            <span class="plug-rail">
+              <span class="lt lt-10 idle plug-lt" data-base="lt lt-10 plug-lt"></span>
+              <span class="rail-lines"><span></span><span></span></span>
+              <span class="rail-word">PLUGIN</span>
+              <span class="rail-dots"><span></span><span></span><span></span><span></span></span>
+            </span>
+            <span class="plug-bar">
+              <span class="lt lt-10 idle plug-lt" data-base="lt lt-10 plug-lt"></span>
+              <span class="plug-bar-word">PLUGIN</span>
+              <span class="plug-bar-line"></span>
+              <span class="plug-bar-tag">API &middot; MCP &middot; MAIL</span>
+              <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="208 96 128 176 48 96"/></svg>
+            </span>
+          </button>
+          <div class="plug-inner" id="plugInner">
+            <div class="plug-head">
+              <span class="lt lt-10 idle plug-lt" data-base="lt lt-10 plug-lt"></span>
+              <span class="plug-word">PLUGIN</span>
+              <span class="plug-count">03</span>
+              <span class="fill"></span>
+              <button class="plug-fold" id="plugFold" type="button" title="Fold">
+                <svg class="ic ic-right" viewBox="0 0 256 256" aria-hidden="true"><polyline points="96 48 176 128 96 208"/></svg>
+                <svg class="ic ic-up" viewBox="0 0 256 256" aria-hidden="true"><polyline points="48 160 128 80 208 160"/></svg>
+              </button>
+            </div>
+            <div class="conns">
+              <div class="conn">
+                <div class="conn-head"><span class="lt idle"></span><span class="conn-title">API</span><span class="fill"></span><span class="conn-tag">REST</span></div>
+                <button class="cline" id="apiEp" type="button" data-copy-ref="endpoint">
+                  <span class="cline-m">POST</span>
+                  <span class="cline-v" id="apiEpV"></span>
+                  <svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg>
+                </button>
+                <div class="code">
+                  <pre id="curl"></pre>
+                  <button class="code-copy" type="button" title="Copy" data-copy-ref="curl"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+                </div>
+              </div>
+              <div class="conn">
+                <div class="conn-head"><span class="lt idle"></span><span class="conn-title">MCP</span><span class="fill"></span><span class="conn-tag">STREAMABLE HTTP</span></div>
+                <button class="cline" id="mcpUrl" type="button" data-copy-ref="mcpUrl">
+                  <span class="cline-v" id="mcpUrlV"></span>
+                  <svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg>
+                </button>
+                <div class="code">
+                  <pre id="cfg"></pre>
+                  <button class="code-copy" type="button" title="Copy" data-copy-ref="cfg"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+                </div>
+              </div>
+              <div class="conn">
+                <div class="conn-head"><span class="lt idle" id="mailLt"></span><span class="conn-title">MAILBOX</span><span class="fill"></span><span class="conn-tag">SMTP</span></div>
+                <div class="mlist" id="mlist"></div>
+                <button class="btn-mail" id="mailCreate" type="button" disabled>CREATE MAILBOX</button>
+                <div class="msg" id="mailMsg" role="status"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>

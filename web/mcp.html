@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lacre &middot; MCP</title>
+<meta name="description" content="Connect an agent to Lacre over MCP, the API or a mailbox.">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body data-page="mcp">
+
+<header class="nav">
+  <a class="logo" href="/"><span class="logo-knob"></span><span class="logo-word">LACRE</span></a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html" aria-current="page">MCP</a>
+    <a class="nav-access" href="/access.html">Access</a>
+  </nav>
+  <button class="nav-menu" type="button" aria-label="Menu" aria-expanded="false">
+    <svg class="ic ic-open" viewBox="0 0 256 256" aria-hidden="true"><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="192" x2="216" y2="192"/></svg>
+    <svg class="ic ic-close" viewBox="0 0 256 256" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>
+  </button>
+  <div class="nav-drop">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html" aria-current="page">MCP</a>
+    <a href="/access.html">Access</a>
+  </div>
+</header>
+
+<main class="mcp-wrap">
+  <h1 class="eyebrow mcp-col">MCP</h1>
+  <div class="mcp-col">
+    <div class="plug panel">
+      <div class="plug-inner">
+        <div class="plug-head">
+          <span class="lt lt-10 idle"></span>
+          <span class="plug-word">PLUGIN</span>
+          <span class="plug-count">03</span>
+          <span class="fill"></span>
+        </div>
+        <div class="conns">
+          <div class="conn">
+            <div class="conn-head"><span class="lt idle"></span><span class="conn-title">API</span><span class="fill"></span><span class="conn-tag">REST</span></div>
+            <button class="cline" type="button" data-copy="https://lacre.in-sidr.xyz/attest"><span class="cline-m">POST</span><span class="cline-v">https://lacre.in-sidr.xyz/attest</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            <div class="code">
+              <pre id="mcpCurl">curl -X POST https://lacre.in-sidr.xyz/attest \
+  -H &quot;X-API-Key: $LACRE_KEY&quot; \
+  -F &quot;eml=@message.eml&quot; \
+  -F &quot;extract=auto&quot;</pre>
+              <button class="code-copy" type="button" title="Copy" data-copy-from="mcpCurl"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            </div>
+          </div>
+          <div class="conn">
+            <div class="conn-head"><span class="lt idle"></span><span class="conn-title">MCP</span><span class="fill"></span><span class="conn-tag">STREAMABLE HTTP</span></div>
+            <button class="cline" type="button" data-copy="https://lacre.in-sidr.xyz/mcp"><span class="cline-v">https://lacre.in-sidr.xyz/mcp</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            <div class="code">
+              <pre id="mcpCfg">{
+  &quot;mcpServers&quot;: {
+    &quot;lacre&quot;: {
+      &quot;type&quot;: &quot;http&quot;,
+      &quot;url&quot;: &quot;https://lacre.in-sidr.xyz/mcp&quot;,
+      &quot;headers&quot;: { &quot;X-API-Key&quot;: &quot;YOUR_KEY&quot; }
+    }
+  }
+}</pre>
+              <button class="code-copy" type="button" title="Copy" data-copy-from="mcpCfg"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            </div>
+          </div>
+          <div class="conn">
+            <div class="conn-head"><span class="lt idle"></span><span class="conn-title">MAILBOX</span><span class="fill"></span><span class="conn-tag">SMTP</span></div>
+            <a class="btn-mail" href="/#plugin">CREATE MAILBOX</a>
+          </div>
+          <div class="conn tools">
+            <div class="conn-head"><span class="lt final"></span><span class="conn-title">TOOLS</span><span class="fill"></span><span class="conn-tag">13</span></div>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_attest"><span class="tool-n">lacre_attest</span><span class="tool-a">eml, extract?</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_job"><span class="tool-n">lacre_job</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_wait_job"><span class="tool-n">lacre_wait_job</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_record"><span class="tool-n">lacre_record</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_extraction"><span class="tool-n">lacre_extraction</span><span class="tool-a">lane, id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_sender"><span class="tool-n">lacre_sender</span><span class="tool-a">domain, selector</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_health"><span class="tool-n">lacre_health</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_account"><span class="tool-n">lacre_account</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_create"><span class="tool-n">lacre_mailbox_create</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailboxes"><span class="tool-n">lacre_mailboxes</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox"><span class="tool-n">lacre_mailbox</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_jobs"><span class="tool-n">lacre_mailbox_jobs</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_disable"><span class="tool-n">lacre_mailbox_disable</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>

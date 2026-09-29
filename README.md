@@ -126,7 +126,10 @@ time the extraction starts.
   Verifier call, and two hashes (`bh`, the SHA-256 of the served headers).
   A mailbox address is the gateway's own random name, not a person's; the
   sender of mail to it is never stored. API keys are stored only as
-  SHA-256 digests, to find the account a request belongs to.
+  SHA-256 digests, to find the account a request belongs to. The one
+  exception is the access form of the web app: a request stores the name,
+  email address and free text the visitor typed, and the time, so the
+  operator can answer it (see [Web](#web)).
 - **Nothing personal in the logs.** The gateway logs job ids, tx ids and
   statuses. The public tools print to stdout for a person at a terminal;
   the service sends their stdout nowhere. The HTTP access log is off,
@@ -156,7 +159,7 @@ An unknown key is 401, the key of a disabled account 403. Times are UTC ISO
 | `GET /senders/{domain}/{selector}` | `state`: `active`, `pending` (with `confirm_after` and `can_confirm_now`), `unknown`, `rotated` or `retired`, from the KeyCache at `LATEST_FINAL`. |
 | `GET /account` | the caller's account: `id`, `name`, `enabled`, `unlimited`, `credits` (available now), `held` (reserved by open jobs, already out of `credits`), `charged` (spent by finished jobs), `prices` (`{"attest", "extract"}`), `counts` (`jobs`, `open`, `finalized`, `refused`, `failed`, `mailboxes`), `created_at`, `disabled_at`. |
 | `POST /account/rotate-key` | `{"api_key", "account"}`: a new key, shown this once. The old key stops working at once; the account keeps its id, balance, mailboxes and jobs. |
-| `GET /health` | `chain` (the RPC answers with the right chain id), `router` (it resolves `verifier` and `keycache`), `worker` (alive and passed recently), and `signer` (configured or absent). 200 when all hold, 503 otherwise. |
+| `GET /health` | `chain` (the RPC answers with the right chain id), `router` (it resolves `verifier` and `keycache`), `worker` (alive and passed recently), and `signer` (configured or absent). 200 when all hold, 503 otherwise. `layers` says for each of `router`, `keycache`, `verifier`, `extractor_patterns` and `extractor_llm` whether the Router resolves it now; it is reported only and does not change the status, since a Router may name no Extractor. |
 
 `GET /h/{token}` and `GET /b/{name}.bin` are not part of the API and take
 no key: they serve the headers of an attest call and the body of an extract
@@ -338,6 +341,7 @@ wrong token is 401. Bodies are JSON.
 | `GET /admin/accounts/{id}` | the account with `ledger`: its newest entries first, `?limit=` 1 to 500 (default 50). |
 | `POST /admin/accounts/{id}/topups` | `{"credits", "external_ref", "note"}` through the manual source. `201 {"topup", "created": true, "account"}`; the same `external_ref` again is `200` with `created` false and the first top-up, and nothing is credited twice; with another amount it is 409. |
 | `POST /admin/accounts/{id}/disable`, `/enable` | the account after the change. |
+| `GET /admin/access-requests` | `{"access_requests": [...], "limit", "offset", "next"}`: the requests from the web app's access form, newest first, each `{"id", "name", "email", "what", "created_at"}`. `limit` 1 to 500 (default 50). |
 
 The admin paths are not in the tunnel's routes by default:
 `deploy/cloudflared.yml.example` has them as a commented-out rule. Call
@@ -524,6 +528,67 @@ without credentials, and the Host behind the tunnel is the public name. A
 long `lacre_wait_job` keeps its request open; the SDK sends an SSE ping
 every 15 seconds, which keeps the tunnel from closing it as idle.
 
+## Web
+
+The gateway serves a web app from `web/`: plain HTML, one stylesheet
+(`app.css`), one script (`app.js`), no framework, no build step and no
+runtime dependency. Fonts (Jost, JetBrains Mono) are self-hosted in
+`web/fonts` with their SIL Open Font License files; icons are inline SVG.
+The pages load nothing from another origin, and a Content-Security-Policy
+header holds them to that.
+
+| path | what it is |
+|------|------------|
+| `/` | the main screen: readouts, the disk, attest and the plugin rail |
+| `/how.html` | how an attestation moves, stage by stage |
+| `/docs.html` | the endpoints and MCP tools, and the rule that only a finalized record is proof |
+| `/why.html` | why GenLayer |
+| `/mcp.html` | the API, MCP and mailbox connectors and the tool list |
+| `/access.html` | the access request form |
+| `/static/*` | the stylesheet, the script and the fonts |
+
+None of these takes an API key. What is live on the main screen, against
+the API of the same origin with the visitor's key:
+
+- the account (`GET /account`: balance, prices, job counts) and the
+  contract layers (`GET /health`, `layers`);
+- attest: a .eml by drop or file picker, or pasted source, with the
+  extraction mode, as `POST /attest`; the job is then read from
+  `GET /jobs/{id}` every 20 seconds and drawn on the disk, stage by
+  stage, with the time each on-chain step takes (about 35 minutes; up to
+  24 hours when the sender is in verification). A refused or failed job
+  shows its reason. The output card shows the sender domain, the valid and
+  aligned checks (read from `GET /records/{id}` once final), the record
+  id, the consensus transaction with its explorer link, and the extracted
+  fields; it stays provisional until the job is `finalized` and its
+  transaction `FINALIZED`. A job id pasted under Resume is followed the
+  same way;
+- the plugin rail: the curl for `POST /attest` and the MCP config, both
+  with the key masked on screen and whole in what is copied, and the
+  mailboxes of the account (`GET /mailboxes`, `POST /mailboxes`).
+
+**The key.** The visitor pastes it once per page load. It is kept in a
+JavaScript variable only: never in localStorage, sessionStorage, a cookie
+or the URL, so a reload, or moving to another page, asks for it again. It
+is sent in `X-API-Key` to this origin and nowhere else.
+
+**Access requests.** `POST /access-request` takes JSON
+`{"name", "email", "what"}` with no key: name 1 to 100 characters, a
+syntactically valid email up to 254, `what` optional up to 2000, no
+control characters. It answers 201, 422 for a field that fails, and 429
+past 5 requests an hour from one address (`CF-Connecting-IP` behind the
+tunnel) or 100 an hour from all together. The limit is kept in memory; the
+address is never stored. Requests are listed with
+`GET /admin/access-requests` (see [The admin API](#the-admin-api)).
+
+**Coming soon**, shown disabled on the access page: self-service sign-up
+and top-ups. Until then an operator creates the account and its key.
+
+**The design source** is a self-contained design bundle kept outside this
+repository, with the product design files; nothing of it (its runtime,
+support scripts or the file itself) is copied here. `web/` reproduces it
+by hand.
+
 ## Run locally against the fixtures
 
 ```
@@ -543,6 +608,9 @@ curl -s -H "X-API-Key: $KEY" -F eml=@tests/fixtures/amazon_layout.eml \
     http://127.0.0.1:8080/attest
 curl -s -H "X-API-Key: $KEY" http://127.0.0.1:8080/jobs/<job_id>
 ```
+
+The web app is at `http://127.0.0.1:8080/`: paste the printed key and drop
+the same file; the fixture chain finalizes each step in a few seconds.
 
 `tests/fixtures/amazon_layout.eml` is synthetic: it has the layout of an
 Amazon order confirmation, with example.org addresses and placeholder
@@ -579,7 +647,8 @@ systemctl daemon-reload && systemctl enable --now lacre-gateway
 
 The service listens on 127.0.0.1:8080. `deploy/cloudflared.yml.example` is
 the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
-`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths and `/mcp` only, not
+`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths, `/mcp`, and the web
+app (`/`, the five pages, `/static/*`, `/access-request`) only, not
 `/admin/*`. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
 
@@ -637,4 +706,4 @@ they do to attest calls. No Extractor address is configured: `extractor` and
 ## Out of scope
 
 - Automated top-ups: no payment source exists yet (see [Top-ups](#top-ups)).
-- A web front end.
+- Self-service sign-up and top-ups from the web app (shown as coming soon).

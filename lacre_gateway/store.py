@@ -1,5 +1,5 @@
 """SQLite persistence: accounts and their ledger, jobs, senders, the
-in-flight table and a heartbeat.
+in-flight table, a heartbeat and access requests.
 
 What is stored is listed column by column below, and nothing else is. No
 email address, subject, header value or body is ever written here. The two
@@ -23,6 +23,12 @@ upload: nothing of it is written here but what a job keeps, plus the mailbox
 id the job came through. The addresses of the sender and of any other
 recipient are never stored. The inbound replay table holds HMAC values only,
 for the length of the replay window.
+
+The one exception to the rule on addresses is access_requests: a person who
+asks for access through the web form gives a name, an email address and a
+line on what they will attest, so the operator can answer. Those three
+fields and the time are all a row holds; the visitor's IP address is not
+stored, only counted in memory for the rate limit.
 """
 
 import base64
@@ -150,6 +156,15 @@ CREATE TABLE IF NOT EXISTS topups (
 CREATE TABLE IF NOT EXISTS inbound_seen (
     signature TEXT PRIMARY KEY,
     seen_at   REAL NOT NULL
+);
+-- Requests from the access form of the web app, kept until the operator
+-- deletes them by hand.
+CREATE TABLE IF NOT EXISTS access_requests (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    email      TEXT NOT NULL,
+    what       TEXT NOT NULL,
+    created_at REAL NOT NULL
 );
 """
 
@@ -635,6 +650,20 @@ class Store:
                 log.warning("%d %s owned by a key no account has were left without one",
                             count, table)
         return orphans
+
+    # ---- access requests ---------------------------------------------------
+
+    def add_access_request(self, name, email, what):
+        with self._lock:
+            cursor = self._run("INSERT INTO access_requests (name, email, what, created_at) "
+                               "VALUES (?, ?, ?, ?)", (name, email, what, self.clock()))
+            return self._one("SELECT * FROM access_requests WHERE id = ?",
+                             (cursor.lastrowid,))
+
+    def access_requests(self, limit, offset):
+        """A page of the access requests, newest first."""
+        return self._all("SELECT * FROM access_requests ORDER BY id DESC LIMIT ? OFFSET ?",
+                         (limit, offset))
 
     # ---- in-flight ---------------------------------------------------------
 

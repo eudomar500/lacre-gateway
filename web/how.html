@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lacre &middot; How it works</title>
+<meta name="description" content="How Lacre attests a signed email on GenLayer, stage by stage.">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body data-page="how">
+
+<header class="nav">
+  <a class="logo" href="/"><span class="logo-knob"></span><span class="logo-word">LACRE</span></a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="/how.html" aria-current="page">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a class="nav-access" href="/access.html">Access</a>
+  </nav>
+  <button class="nav-menu" type="button" aria-label="Menu" aria-expanded="false">
+    <svg class="ic ic-open" viewBox="0 0 256 256" aria-hidden="true"><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="192" x2="216" y2="192"/></svg>
+    <svg class="ic ic-close" viewBox="0 0 256 256" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>
+  </button>
+  <div class="nav-drop">
+    <a href="/how.html" aria-current="page">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a href="/access.html">Access</a>
+  </div>
+</header>
+
+<main class="page">
+  <h1 class="eyebrow">HOW IT WORKS</h1>
+  <ol class="how-mods" aria-label="Stages">
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">01</span><span class="lt lt-9 idle"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Queued</span><span class="mod-eta">&lt; 1 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">02</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Attesting</span><span class="mod-eta">&asymp; 2 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">03</span><span class="lt lt-9 provisional"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">04</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Serving body</span><span class="mod-eta">&asymp; 1 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">05</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Extracting</span><span class="mod-eta">&asymp; 3 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">06</span><span class="lt lt-9 provisional"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">07</span><span class="lt lt-9 final"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Recorded</span><span class="mod-eta">&mdash;</span></div></div></li>
+  </ol>
+  <div class="how-text">
+    <p>Drop a signed email and GenLayer validators fetch the sender's keys and check the signature by consensus.</p>
+    <p>Once that is final, the body is served and its fields are read &mdash; agreed on the same way.</p>
+    <p>Only then is it recorded.</p>
+  </div>
+</main>
+
+</body>
+</html>

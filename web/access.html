@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lacre &middot; Access</title>
+<meta name="description" content="Request access to Lacre.">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body data-page="access">
+
+<header class="nav">
+  <a class="logo" href="/"><span class="logo-knob"></span><span class="logo-word">LACRE</span></a>
+  <nav class="nav-links" aria-label="Main">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a class="nav-access" href="/access.html" aria-current="page">Access</a>
+  </nav>
+  <button class="nav-menu" type="button" aria-label="Menu" aria-expanded="false">
+    <svg class="ic ic-open" viewBox="0 0 256 256" aria-hidden="true"><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="192" x2="216" y2="192"/></svg>
+    <svg class="ic ic-close" viewBox="0 0 256 256" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>
+  </button>
+  <div class="nav-drop">
+    <a href="/how.html">How it works</a>
+    <a href="/docs.html">Docs</a>
+    <a href="/why.html">Why GenLayer</a>
+    <a href="/mcp.html">MCP</a>
+    <a href="/access.html" aria-current="page">Access</a>
+  </div>
+</header>
+
+<main class="page access">
+  <h1 class="eyebrow">ACCESS</h1>
+  <form class="acc-form" id="accForm" novalidate>
+    <div class="acc-two">
+      <label class="field"><span class="label">NAME</span><input class="acc-in" id="accName" name="name" maxlength="100" autocomplete="name" required></label>
+      <label class="field"><span class="label">EMAIL</span><input class="acc-in mono" id="accEmail" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+    </div>
+    <label class="field"><span class="label">WHAT YOU WILL ATTEST</span><textarea class="acc-in" id="accWhat" name="what" maxlength="2000" placeholder="Shipping notices, invoices&hellip;"></textarea></label>
+    <div class="acc-foot">
+      <button class="btn-main" id="accSend" type="submit" disabled>REQUEST ACCESS</button>
+      <span class="acc-ok" id="accOk" role="status" hidden><span class="lt final"></span>RECEIVED</span>
+      <span class="msg err" id="accMsg" role="alert"></span>
+    </div>
+  </form>
+  <div class="soon">
+    <div class="soon-card" aria-disabled="true">
+      <div class="soon-top"><span class="lt off"></span><span class="soon-tag">COMING SOON</span></div>
+      <span class="soon-n">Self-service sign-up</span>
+    </div>
+    <div class="soon-card" aria-disabled="true">
+      <div class="soon-top"><span class="lt off"></span><span class="soon-tag">COMING SOON</span></div>
+      <span class="soon-n">Top-ups</span>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>
