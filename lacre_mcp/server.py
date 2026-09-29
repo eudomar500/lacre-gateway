@@ -41,7 +41,8 @@ only once the job is finalized, and only with its Verifier address. Before
 acting on a record, check it with check_for on the Verifier and read the
 sender's key status at that time (lacre_sender). On-chain steps take about 35
 minutes each, and a sender the gateway has not seen before waits 24 hours in
-quarantine first."""
+quarantine first. Every job costs credits; lacre_account shows the balance
+and the prices."""
 
 READ = ToolAnnotations(read_only_hint=True, open_world_hint=True)
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False,
@@ -115,7 +116,9 @@ def build_server(gateway_for, *, sleep=anyio.sleep, clock=time.monotonic):
         return await call(ctx, "GET", "/jobs/%s" % (segment(job_id),))
 
     @server.tool(annotations=READ, description=(
-        "Read one job. status is pending, attesting, extracting, finalized, refused or "
+        "Read one job of this API key's account, created by lacre_attest or through one "
+        "of its mailboxes; a job of another account gives the same not-found error as one "
+        "that does not exist. status is pending, attesting, extracting, finalized, refused or "
         "failed. Only finalized, refused and failed are final; any other status is "
         "provisional and will change. stage says what the gateway is doing now, and "
         "sender_confirm_after appears while the sender's key is in its 24 hour "
@@ -229,6 +232,20 @@ def build_server(gateway_for, *, sleep=anyio.sleep, clock=time.monotonic):
         # 503 is the answer "not every check holds", not a failed call; its
         # body says which.
         return dict(body, ok=status == 200)
+
+    @server.tool(annotations=READ, description=(
+        "Read this API key's account: id, name, enabled, unlimited, credits (available "
+        "now), held (credits reserved by open jobs, already taken out of credits), charged "
+        "(credits spent by finished jobs), prices (credits per attestation and per "
+        "extraction), and counts of jobs by status and of mailboxes. Creating a job holds "
+        "the attestation price, plus the extraction price when an extraction is asked for "
+        "and can run; when it ends, a step that wrote a record is charged (an extraction "
+        "record with match false included) and the rest is released. Each job shows this "
+        "as cost: held, charged, released. When credits cannot cover a job, lacre_attest "
+        "fails with the shortfall and mail to a mailbox bounces; an operator adds credits. "
+        "unlimited true means no credits are taken, though jobs still show their cost."))
+    async def lacre_account(ctx: Context) -> dict:
+        return await call(ctx, "GET", "/account")
 
     @server.tool(annotations=WRITE, description=(
         "Create a mailbox: an email address of its own, lacre-<id>@in-sidr.xyz, owned by "

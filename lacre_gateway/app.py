@@ -12,6 +12,10 @@ LACRE_INBOUND_SECRET, which no agent holds (see inbound_mac).
 
 /mcp serves the lacre_mcp tools over streamable HTTP, behind the same key
 check as the API (see McpEndpoint).
+
+Every API key is an account (accounts.py). /admin/* manages accounts and
+takes LACRE_ADMIN_TOKEN in X-Admin-Token, never an API key, so a leaked
+API key cannot mint credits or read other accounts.
 """
 
 import datetime
@@ -24,34 +28,57 @@ import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 from mcp.server.transport_security import TransportSecuritySettings
+from pydantic import BaseModel, Field
 from starlette.routing import Route
 
 from lacre_mcp.gateway import Gateway
 from lacre_mcp.server import build_server
 
-from . import headers
+from . import accounts, headers
 from .blobs import BODY, BlobStore
 from .chainio import ChainUnavailable
 from .config import EXTRACT_MODES
 from .contracts import LANES, confirm_after, sender_state
+from .store import InsufficientCredits, TopUpConflict
+from .topups import ManualTopUp
 from .vendor import attest
 
 log = logging.getLogger("lacre_gateway.app")
 
 API_KEY_HEADER = "X-API-Key"
+ADMIN_TOKEN_HEADER = "X-Admin-Token"
 SIGNATURE_HEADER = "X-Lacre-Signature"
 RECIPIENT_HEADER = "X-Lacre-Recipient"
 TIMESTAMP_HEADER = "X-Lacre-Timestamp"
 # How far a delivery's timestamp may be from the gateway clock, either way.
 INBOUND_SKEW_S = 300
 MAILBOX_ID = re.compile(r"^[a-z2-7]{12}$")
+# Account ids are drawn as mailbox ids are (store.random_id).
+ACCOUNT_ID = MAILBOX_ID
 SIGNATURE = re.compile(r"^[0-9a-f]{64}$")
 PAGE_MAX = 100
+LEDGER_MAX = 500
 
 
-def owner_of(api_key):
-    """What a mailbox or job records as its owner: a digest, never the key."""
-    return hashlib.sha256(api_key.encode()).hexdigest()
+class PaymentRequired(HTTPException):
+    """402, with the numbers an agent needs to ask for a top-up."""
+
+    def __init__(self, short):
+        super().__init__(status_code=402, detail=(
+            "not enough credits: this job holds %d, the balance is %d, %d short"
+            % (short.needed, short.credits, short.shortfall)))
+        self.short = short
+
+
+class NewAccount(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    credits: int = Field(0, ge=0)
+
+
+class NewTopUp(BaseModel):
+    credits: int = Field(ge=1)
+    external_ref: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(None, max_length=500)
 
 
 def inbound_mac(secret, timestamp, recipient, raw):
@@ -84,6 +111,50 @@ def mailbox_view(row, domain):
         "disabled_at": iso(row["disabled_at"]),
         "jobs": "/mailboxes/%s/jobs" % (row["id"],),
     }
+
+
+def cost_view(job):
+    """What a job holds and, once it ended, what of that was charged and
+    what released. Both are 0 while the job is open."""
+    return {"held": job["held_attest"] + job["held_extract"],
+            "charged": job["charged"] or 0, "released": job["released"] or 0}
+
+
+def account_view(account, usage, settings):
+    jobs = usage["jobs"]
+    return {
+        "id": account["id"],
+        "name": account["name"],
+        "enabled": bool(account["enabled"]),
+        "unlimited": bool(account["unlimited"]),
+        # Available now: what open jobs hold is already taken out.
+        "credits": account["credits"],
+        "held": usage["held"],
+        "charged": usage["charged"],
+        "prices": {"attest": settings.price_attest, "extract": settings.price_extract},
+        "counts": {
+            "jobs": sum(jobs.values()),
+            "open": jobs["pending"] + jobs["attesting"] + jobs["extracting"],
+            "finalized": jobs["finalized"],
+            "refused": jobs["refused"],
+            "failed": jobs["failed"],
+            "mailboxes": usage["mailboxes"],
+        },
+        "created_at": iso(account["created_at"]),
+        "disabled_at": iso(account["disabled_at"]),
+    }
+
+
+def ledger_view(row):
+    return {"id": row["id"], "delta": row["delta"], "kind": row["kind"],
+            "job_id": row["job_id"], "topup_id": row["topup_id"], "note": row["note"],
+            "created_at": iso(row["created_at"])}
+
+
+def topup_view(row):
+    return {"id": row["id"], "account_id": row["account_id"], "credits": row["credits"],
+            "source": row["source"], "external_ref": row["external_ref"], "note": row["note"],
+            "created_at": iso(row["created_at"])}
 
 
 def extraction_view(job, chain):
@@ -132,14 +203,13 @@ def iso(seconds):
         .strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def known_key(settings, given):
-    """The configured key equal to given, or None."""
-    matched = None
-    for key in settings.api_keys:
-        # Every key is compared, so timing does not tell which one is near.
-        if hmac.compare_digest(given.encode(), key.encode()):
-            matched = key
-    return matched if given else None
+def key_refusal(account):
+    """(status, detail) when a request with this account is refused, else None."""
+    if account is None:
+        return 401, "missing or unknown API key"
+    if not account["enabled"]:
+        return 403, "this account is disabled"
+    return None
 
 
 class McpEndpoint:
@@ -150,15 +220,15 @@ class McpEndpoint:
     sees over REST and a remote agent needs nothing configured but its key.
     """
 
-    def __init__(self, settings, session_manager):
-        self.settings = settings
+    def __init__(self, store, session_manager):
+        self.store = store
         self.session_manager = session_manager
 
     async def __call__(self, scope, receive, send):
         given = Request(scope).headers.get(API_KEY_HEADER, "")
-        if known_key(self.settings, given) is None:
-            response = JSONResponse(status_code=401,
-                                    content={"detail": "missing or unknown API key"})
+        refused = key_refusal(accounts.authenticate(self.store, given))
+        if refused:
+            response = JSONResponse(status_code=refused[0], content={"detail": refused[1]})
             await response(scope, receive, send)
             return
         await self.session_manager.handle_request(scope, receive, send)
@@ -169,6 +239,8 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
 
     clock = clock or time.time
     bodies = bodies or BlobStore(settings.body_dir, settings.body_url, BODY)
+    accounts.bootstrap(store, settings.api_keys, settings.bootstrap_credits)
+    manual = ManualTopUp(store)
 
     def in_process(ctx):
         # McpEndpoint has checked this key; the API checks it again on every
@@ -194,7 +266,7 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
 
     app = FastAPI(title="Lacre gateway", docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=lambda app: session_manager.run())
-    endpoint = McpEndpoint(settings, session_manager)
+    endpoint = McpEndpoint(store, session_manager)
     # Both spellings are routed so that neither is answered with a redirect,
     # which some MCP clients do not follow on POST.
     app.router.routes.append(Route("/mcp", endpoint=endpoint, name="mcp"))
@@ -202,11 +274,19 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
     chain = contracts.chain
 
     def require_key(request: Request):
-        """The owner digest of the caller's key, or 401."""
-        matched = known_key(settings, request.headers.get(API_KEY_HEADER, ""))
-        if matched is None:
-            raise HTTPException(status_code=401, detail="missing or unknown API key")
-        return owner_of(matched)
+        """The caller's account; 401 for an unknown key, 403 when disabled."""
+        account = accounts.authenticate(store, request.headers.get(API_KEY_HEADER, ""))
+        refused = key_refusal(account)
+        if refused:
+            raise HTTPException(status_code=refused[0], detail=refused[1])
+        return account
+
+    def require_admin(request: Request):
+        if not settings.admin_token:
+            raise HTTPException(status_code=503, detail="the admin API is not configured")
+        given = request.headers.get(ADMIN_TOKEN_HEADER, "")
+        if not hmac.compare_digest(given.encode(), settings.admin_token.encode()):
+            raise HTTPException(status_code=401, detail="missing or wrong admin token")
 
     def extract_mode(extract):
         mode = (extract or settings.extract_default).strip().lower()
@@ -219,9 +299,16 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
     async def chain_down(request, error):
         return JSONResponse(status_code=503, content={"detail": "chain unavailable"})
 
+    @app.exception_handler(PaymentRequired)
+    async def payment_required(request, error):
+        short = error.short
+        return JSONResponse(status_code=402, content={
+            "detail": error.detail, "needed": short.needed, "credits": short.credits,
+            "shortfall": short.shortfall})
+
     @app.post("/attest", status_code=202)
     async def post_attest(eml: UploadFile = File(...), extract: str | None = Form(None),
-                          owner: str = Depends(require_key)):
+                          account: dict = Depends(require_key)):
         try:
             mode = extract_mode(extract)
         except HTTPException:
@@ -231,11 +318,16 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         await eml.close()
         if len(raw) > settings.max_eml_bytes:
             raise HTTPException(status_code=413, detail="the message is too large")
-        return create_job(raw, mode, owner)
+        return create_job(raw, mode, account["id"])
 
-    def create_job(raw, mode, owner, via="api", mailbox=None):
+    def create_job(raw, mode, account_id, via="api", mailbox=None):
         """The job stub for one message: the one path an upload and a
-        delivery to a mailbox both take, so the worker cannot tell them apart."""
+        delivery to a mailbox both take, so the worker cannot tell them apart.
+
+        The hold is taken after parsing, because only then is it known
+        whether the extraction can run, and before anything is staged, so a
+        job the balance cannot cover leaves nothing behind.
+        """
         body = skipped = None
         try:
             chosen = headers.select(raw)
@@ -247,10 +339,17 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
             # Every unsigned header goes no further than this, and the body
             # only to its staging file when an extraction will use it.
             raw = None
+        extracts = mode != "none" and skipped is None
         sender = store.sender(chosen.domain, chosen.selector)
-        job_id = store.create_job(sender["id"], chosen.headers_sha256, chosen.bh,
-                                  chosen.body_hash_ok, extract_mode=mode, skipped=skipped,
-                                  via=via, mailbox=mailbox, owner=owner)
+        try:
+            job_id = store.create_job(
+                sender["id"], chosen.headers_sha256, chosen.bh, chosen.body_hash_ok,
+                extract_mode=mode, skipped=skipped, via=via, mailbox=mailbox,
+                account_id=account_id, held_attest=settings.price_attest,
+                held_extract=settings.price_extract if extracts else 0)
+        except InsufficientCredits as short:
+            body = None
+            raise PaymentRequired(short) from None
         try:
             blobs.stage(job_id, chosen.blob)
             if body is not None:
@@ -266,10 +365,14 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         return {"job_id": job_id, "status": "pending", "job": "/jobs/%s" % (job_id,),
                 "extract": mode}
 
-    @app.get("/jobs/{job_id}", dependencies=[Depends(require_key)])
-    def get_job(job_id: str):
+    @app.get("/jobs/{job_id}")
+    def get_job(job_id: str, account: dict = Depends(require_key)):
         job = store.job(job_id)
-        if job is None:
+        # Another account's job is answered exactly as a missing one, as
+        # for mailboxes, so a key cannot learn which job ids exist. A job
+        # from before accounts has none and no key sees it; its record stays
+        # readable through /records, which is public chain state.
+        if job is None or job["account_id"] != account["id"]:
             raise HTTPException(status_code=404, detail="no such job")
         return job_view(job)
 
@@ -297,6 +400,7 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
                                   else bool(job["body_hash_ok"])),
             "via": job["via"] or "api",
             "mailbox": job["mailbox"],
+            "cost": cost_view(job),
         }
         if job["stage"] == "sender in verification":
             body["sender_confirm_after"] = iso(job["confirm_after"])
@@ -316,42 +420,42 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
 
     # ---- mailboxes -------------------------------------------------------------
 
-    def owned_mailbox(mailbox_id, owner):
-        # Another key's mailbox is answered exactly as a missing one, so a
-        # key cannot learn which ids exist.
+    def owned_mailbox(mailbox_id, account):
+        # Another account's mailbox is answered exactly as a missing one, so
+        # a key cannot learn which ids exist.
         row = store.mailbox(mailbox_id) if MAILBOX_ID.match(mailbox_id) else None
-        if row is None or not hmac.compare_digest(row["owner"], owner):
+        if row is None or row["account_id"] != account["id"]:
             raise HTTPException(status_code=404, detail="no such mailbox")
         return row
 
     @app.post("/mailboxes", status_code=201)
-    def post_mailbox(extract: str | None = Form(None), owner: str = Depends(require_key)):
-        row = store.create_mailbox(owner, extract_mode(extract))
+    def post_mailbox(extract: str | None = Form(None), account: dict = Depends(require_key)):
+        row = store.create_mailbox(account["id"], extract_mode(extract))
         log.info("mailbox %s created", row["id"])
         return mailbox_view(row, settings.mail_domain)
 
     @app.get("/mailboxes")
-    def list_mailboxes(owner: str = Depends(require_key)):
+    def list_mailboxes(account: dict = Depends(require_key)):
         return {"mailboxes": [mailbox_view(r, settings.mail_domain)
-                              for r in store.mailboxes(owner)]}
+                              for r in store.mailboxes(account["id"])]}
 
     @app.get("/mailboxes/{mailbox_id}")
-    def get_mailbox(mailbox_id: str, owner: str = Depends(require_key)):
-        return mailbox_view(owned_mailbox(mailbox_id, owner), settings.mail_domain)
+    def get_mailbox(mailbox_id: str, account: dict = Depends(require_key)):
+        return mailbox_view(owned_mailbox(mailbox_id, account), settings.mail_domain)
 
     @app.delete("/mailboxes/{mailbox_id}")
-    def delete_mailbox(mailbox_id: str, owner: str = Depends(require_key)):
+    def delete_mailbox(mailbox_id: str, account: dict = Depends(require_key)):
         # Disabled, not deleted: its jobs keep pointing at it and the
         # counters go on counting what is dropped there.
-        owned_mailbox(mailbox_id, owner)
+        owned_mailbox(mailbox_id, account)
         store.disable_mailbox(mailbox_id)
         log.info("mailbox %s disabled", mailbox_id)
         return mailbox_view(store.mailbox(mailbox_id), settings.mail_domain)
 
     @app.get("/mailboxes/{mailbox_id}/jobs")
-    def mailbox_jobs(mailbox_id: str, owner: str = Depends(require_key),
+    def mailbox_jobs(mailbox_id: str, account: dict = Depends(require_key),
                      limit: int = Query(20, ge=1, le=PAGE_MAX), offset: int = Query(0, ge=0)):
-        owned_mailbox(mailbox_id, owner)
+        owned_mailbox(mailbox_id, account)
         # One more than asked tells whether there is a next page without a
         # second query.
         jobs = store.mailbox_jobs(mailbox_id, limit + 1, offset)
@@ -414,12 +518,16 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
             store.count_unknown_inbound()
             log.info("inbound: unknown mailbox, dropped")
             raise HTTPException(status_code=404, detail="no such mailbox")
-        if not row["enabled"]:
+        holder = store.account(row["account_id"]) if row["account_id"] else None
+        # A disabled account's mailboxes take nothing, as a disabled mailbox.
+        if not row["enabled"] or holder is None or not holder["enabled"]:
             store.count_inbound(mailbox_id, received=False)
             log.info("inbound: mailbox %s disabled, dropped", mailbox_id)
             raise HTTPException(status_code=404, detail="no such mailbox")
         try:
-            stub = create_job(raw, row["extract_mode"], row["owner"], via="inbound",
+            # A 402 lands in the except below too: the delivery is dropped
+            # and counted, the Worker bounces it, and nothing of it is kept.
+            stub = create_job(raw, row["extract_mode"], holder["id"], via="inbound",
                               mailbox=mailbox_id)
         except HTTPException:
             store.count_inbound(mailbox_id, received=False)
@@ -430,6 +538,88 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         store.count_inbound(mailbox_id, received=True)
         log.info("inbound: mailbox %s, job %s", mailbox_id, stub["job_id"])
         return stub
+
+    # ---- the caller's account ----------------------------------------------------
+
+    @app.get("/account")
+    def get_account(account: dict = Depends(require_key)):
+        return account_view(account, store.usage(account["id"]), settings)
+
+    @app.post("/account/rotate-key")
+    def rotate_key(account: dict = Depends(require_key)):
+        # The account keeps its id, balance, mailboxes and jobs; only the
+        # digest it is found by changes, so the old key stops at once.
+        key = accounts.new_key()
+        store.update_account(account["id"], key_sha256=accounts.digest(key))
+        log.info("account %s: key rotated", account["id"])
+        fresh = store.account(account["id"])
+        return {"api_key": key,
+                "account": account_view(fresh, store.usage(fresh["id"]), settings)}
+
+    # ---- admin -------------------------------------------------------------------
+
+    def admin_account(account_id):
+        row = store.account(account_id) if ACCOUNT_ID.match(account_id) else None
+        if row is None:
+            raise HTTPException(status_code=404, detail="no such account")
+        return row
+
+    def admin_view(row):
+        return dict(account_view(row, store.usage(row["id"]), settings),
+                    bootstrap=row["bootstrap_sha256"] is not None)
+
+    @app.post("/admin/accounts", status_code=201, dependencies=[Depends(require_admin)])
+    def admin_create_account(new: NewAccount):
+        name = new.name.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="name cannot be blank")
+        key = accounts.new_key()
+        row = store.create_account(name, accounts.digest(key), credits=new.credits)
+        log.info("account %s created", row["id"])
+        # The only time the key is shown; the gateway keeps its digest.
+        return {"api_key": key, "account": admin_view(row)}
+
+    @app.get("/admin/accounts", dependencies=[Depends(require_admin)])
+    def admin_list_accounts():
+        return {"accounts": [admin_view(r) for r in store.accounts()]}
+
+    @app.get("/admin/accounts/{account_id}", dependencies=[Depends(require_admin)])
+    def admin_get_account(account_id: str, limit: int = Query(50, ge=1, le=LEDGER_MAX)):
+        row = admin_account(account_id)
+        return dict(admin_view(row),
+                    ledger=[ledger_view(e) for e in store.ledger(row["id"], limit)])
+
+    @app.post("/admin/accounts/{account_id}/topups", dependencies=[Depends(require_admin)])
+    def admin_topup(account_id: str, new: NewTopUp):
+        row = admin_account(account_id)
+        try:
+            topup, created = manual.credit(row["id"], new.credits, new.external_ref.strip(),
+                                           new.note)
+        except TopUpConflict as error:
+            raise HTTPException(status_code=409, detail=str(error))
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error))
+        if created:
+            log.info("account %s: topup %s", row["id"], topup["id"])
+        # 200 for an event already credited, so a retried request is told
+        # apart from a new top-up without a second credit.
+        return JSONResponse(status_code=201 if created else 200, content={
+            "topup": topup_view(topup), "created": created,
+            "account": admin_view(store.account(row["id"]))})
+
+    @app.post("/admin/accounts/{account_id}/disable", dependencies=[Depends(require_admin)])
+    def admin_disable(account_id: str):
+        row = admin_account(account_id)
+        store.set_enabled(row["id"], False)
+        log.info("account %s disabled", row["id"])
+        return admin_view(store.account(row["id"]))
+
+    @app.post("/admin/accounts/{account_id}/enable", dependencies=[Depends(require_admin)])
+    def admin_enable(account_id: str):
+        row = admin_account(account_id)
+        store.set_enabled(row["id"], True)
+        log.info("account %s enabled", row["id"])
+        return admin_view(store.account(row["id"]))
 
     @app.get("/records/{record_id}", dependencies=[Depends(require_key)])
     def get_record(record_id: str, verifier: str | None = None):

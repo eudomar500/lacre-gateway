@@ -126,7 +126,7 @@ time the extraction starts.
   Verifier call, and two hashes (`bh`, the SHA-256 of the served headers).
   A mailbox address is the gateway's own random name, not a person's; the
   sender of mail to it is never stored. API keys are stored only as
-  SHA-256 digests, to say which key owns a mailbox or a job.
+  SHA-256 digests, to find the account a request belongs to.
 - **Nothing personal in the logs.** The gateway logs job ids, tx ids and
   statuses. The public tools print to stdout for a person at a terminal;
   the service sends their stdout nowhere. The HTTP access log is off,
@@ -138,20 +138,24 @@ time the extraction starts.
 ## Endpoints
 
 Every endpoint takes the API key in `X-API-Key`, except `POST /inbound`
-(see [Mailboxes](#mailboxes)). Times are UTC ISO 8601.
+(see [Mailboxes](#mailboxes)) and `/admin/*` (see [Accounts](#accounts)).
+An unknown key is 401, the key of a disabled account 403. Times are UTC ISO
+8601.
 
 | method and path | answer |
 |-----------------|--------|
-| `POST /attest` | multipart form, field `eml`, optional field `extract` (`none`, `patterns`, `llm`, `auto`; default `LACRE_EXTRACT_DEFAULT`, `auto`). `202 {"job_id", "status": "pending", "job", "extract"}`. 422 for a message that cannot be attested or an unknown `extract`, 413 over `LACRE_MAX_EML_BYTES`. |
-| `GET /jobs/{id}` | `status` (`pending`, `attesting`, `extracting`, `finalized`, `refused`, `failed`), `stage`, timestamps, `consensus_tx` and `explorer` once sent (every attempt in `consensus_txs`), `tx_status`, `sender_confirm_after` while the sender is in verification, `record_id`, `verifier` and `valid_and_aligned` when written (a record means the check ran, not that it passed), `refusal_reason` when refused, `error` when failed, `body_hash_matches`, `via` (`api` for an upload, `inbound` for mail to a mailbox), `mailbox` (its id, or `null`), and `extraction` (below; `null` for `extract=none`). |
+| `POST /attest` | multipart form, field `eml`, optional field `extract` (`none`, `patterns`, `llm`, `auto`; default `LACRE_EXTRACT_DEFAULT`, `auto`). `202 {"job_id", "status": "pending", "job", "extract"}`. 422 for a message that cannot be attested or an unknown `extract`, 413 over `LACRE_MAX_EML_BYTES`, 402 when the balance cannot cover the hold (see [Pricing](#pricing)). |
+| `GET /jobs/{id}` | only the account that created the job (by upload, or through one of its mailboxes) sees it; any other key, bootstrap keys included, gets 404, as for a job that does not exist. `status` (`pending`, `attesting`, `extracting`, `finalized`, `refused`, `failed`), `stage`, timestamps, `consensus_tx` and `explorer` once sent (every attempt in `consensus_txs`), `tx_status`, `sender_confirm_after` while the sender is in verification, `record_id`, `verifier` and `valid_and_aligned` when written (a record means the check ran, not that it passed), `refusal_reason` when refused, `error` when failed, `body_hash_matches`, `via` (`api` for an upload, `inbound` for mail to a mailbox), `mailbox` (its id, or `null`), `cost` (`{"held", "charged", "released"}`, see [Pricing](#pricing)), and `extraction` (below; `null` for `extract=none`). |
 | `POST /mailboxes` | optional form field `extract` (as for `/attest`; default `LACRE_EXTRACT_DEFAULT`). `201` with the mailbox: `id` (12 base32 characters), `address` (`lacre-<id>@<LACRE_MAIL_DOMAIN>`), `extract`, `enabled`, `received`, `dropped`, `last_received_at`, `created_at`, `disabled_at`, `jobs`. |
 | `GET /mailboxes` | `{"mailboxes": [...]}`, the caller key's mailboxes, oldest first. |
 | `GET /mailboxes/{id}` | one mailbox. 404 for an id that does not exist or belongs to another key; the two are not told apart. |
 | `DELETE /mailboxes/{id}` | disables the mailbox and returns it. It is kept, with its jobs and counters; mail to it is dropped from then on. |
 | `GET /mailboxes/{id}/jobs` | `{"jobs": [...], "limit", "offset", "next"}`: the mailbox's jobs, newest first, each as `GET /jobs/{id}` shows it. `limit` 1 to 100 (default 20), `offset` from 0; `next` is the path of the next page, or `null`. |
-| `GET /records/{id}` | the record, read from the Verifier at `LATEST_FINAL`. The Verifier is resolved through the Router on every request. `?verifier=` reads an earlier Verifier, only one the Router's history names. The answer carries `verifier` (a record id means nothing without it), `valid_and_aligned`, and `extractions`: the records on both Extractors, found through `records_of` for the gateway's wallet, whose `record_id` is this id and whose `verifier` is this Verifier, each as `{"lane", "extractor", "id", "record"}`. |
+| `GET /records/{id}` | the record, read from the Verifier at `LATEST_FINAL`. Any key reads any record, as does `/extractions`: records are public chain state. The Verifier is resolved through the Router on every request. `?verifier=` reads an earlier Verifier, only one the Router's history names. The answer carries `verifier` (a record id means nothing without it), `valid_and_aligned`, and `extractions`: the records on both Extractors, found through `records_of` for the gateway's wallet, whose `record_id` is this id and whose `verifier` is this Verifier, each as `{"lane", "extractor", "id", "record"}`. |
 | `GET /extractions/{lane}/{id}` | one extraction record, `lane` `patterns` or `llm`, read at `LATEST_FINAL` from the Extractor the Router names for that lane now: `{"lane", "extractor", "id", "read_at", "record"}`. |
 | `GET /senders/{domain}/{selector}` | `state`: `active`, `pending` (with `confirm_after` and `can_confirm_now`), `unknown`, `rotated` or `retired`, from the KeyCache at `LATEST_FINAL`. |
+| `GET /account` | the caller's account: `id`, `name`, `enabled`, `unlimited`, `credits` (available now), `held` (reserved by open jobs, already out of `credits`), `charged` (spent by finished jobs), `prices` (`{"attest", "extract"}`), `counts` (`jobs`, `open`, `finalized`, `refused`, `failed`, `mailboxes`), `created_at`, `disabled_at`. |
+| `POST /account/rotate-key` | `{"api_key", "account"}`: a new key, shown this once. The old key stops working at once; the account keeps its id, balance, mailboxes and jobs. |
 | `GET /health` | `chain` (the RPC answers with the right chain id), `router` (it resolves `verifier` and `keycache`), `worker` (alive and passed recently), and `signer` (configured or absent). 200 when all hold, 503 otherwise. |
 
 `GET /h/{token}` and `GET /b/{name}.bin` are not part of the API and take
@@ -185,11 +189,13 @@ before its call is FINALIZED. A consumer still decides on the record, with
 
 A mailbox gives an agent an address, `lacre-<id>@in-sidr.xyz`. Mail sent
 there is attested, and extracted in the mailbox's `extract` mode, as if
-the key that owns the mailbox had uploaded it; the agent reads the results
-with `GET /mailboxes/{id}/jobs` or `GET /jobs/{id}`. The id is 12
-lowercase base32 characters (60 bits) from a CSPRNG. A mailbox belongs to
-the API key that created it, and another key cannot see, list, disable or
-read the jobs of it.
+the account that owns the mailbox had uploaded it, and paid for as such
+(see [Pricing](#pricing)); the agent reads the results with
+`GET /mailboxes/{id}/jobs` or `GET /jobs/{id}`. The id is 12 lowercase
+base32 characters (60 bits) from a CSPRNG. A mailbox belongs to the
+account whose key created it, keeps belonging to it when the key is
+rotated, and another account cannot see, list, disable or read the jobs of
+it.
 
 Mail arrives through Cloudflare Email Routing: a catch-all rule on the zone
 hands every message to an Email Worker (`deploy/worker`), and the Worker
@@ -214,12 +220,13 @@ Answers: `202` with the same stub as `POST /attest`
 malformed or wrong signature, or a timestamp more than 300 seconds from the
 gateway clock either way; `409` for a signature already taken inside that
 window; `404` for an address that is not a mailbox, an unknown mailbox or a
-disabled one; `422` for a message that cannot be attested, as for
-`/attest`; `503` when `LACRE_INBOUND_SECRET` is not set. Only a 202 creates
-a job.
+disabled one, or one whose account is disabled; `402` when the owning
+account's balance cannot cover the hold; `422` for a message that cannot be
+attested, as for `/attest`; `503` when `LACRE_INBOUND_SECRET` is not set.
+Only a 202 creates a job.
 
 Mail to a disabled mailbox counts in its `dropped`; so does mail that was
-signed correctly but could not be attested. Mail to an unknown mailbox has
+signed correctly but could not be attested or paid for. Mail to an unknown mailbox has
 no row to count on and counts in `inbound_unknown_dropped` of `/health`.
 `received` and `last_received_at` count the deliveries that became jobs.
 Nothing of a dropped message is stored or staged.
@@ -280,6 +287,134 @@ nothing of the message but what an uploaded job keeps is written to the
 database. Create a mailbox with `extract=none` for mail whose body must
 not go to the validators.
 
+## Accounts
+
+Every API key belongs to an account: a random id (12 lowercase base32
+characters from a CSPRNG), a name, the SHA-256 of its key (never the key),
+a credit balance, and an enabled flag. Mailboxes and jobs belong to the
+account, not to the key, so rotating a key (`POST /account/rotate-key`)
+changes nothing else. A disabled account's key is answered 403 everywhere
+and mail to its mailboxes bounces; its open jobs run to the end and settle.
+
+How a customer gets access today: an operator creates the account with
+`POST /admin/accounts`, hands over the key it returns (shown once), and adds
+credits with a top-up whenever the customer pays, outside the gateway. The
+customer reads its balance with `GET /account` or `lacre_account`.
+
+### Bootstrap keys
+
+`LACRE_API_KEYS` keeps working. On every start, each entry that has no
+account gets one, named `bootstrap-N`, with `LACRE_BOOTSTRAP_CREDITS`
+credits. While that is 0, the default, bootstrap accounts are unlimited: a
+job is priced and settled as for any account and shows its `cost`, but
+nothing is taken from a balance, so a gateway deployed before accounts
+behaves as it did. An entry taken out of the list revokes its key, as it
+did before. A bootstrap account whose key was rotated is matched to its
+entry by the entry's digest, so it does not get a second account; taken out
+of the list it is not revoked (its key is no longer that entry) and only
+stops being unlimited.
+
+On the first start with accounts, mailboxes and jobs owned by a key digest
+move to the account of that key, and the digest columns are dropped. A row
+whose digest no configured key has keeps no account: its key was already
+gone, and no key could reach it before either.
+
+**Before mainnet:** unlimited bootstrap credits are a testnet convenience.
+Set `LACRE_BOOTSTRAP_CREDITS` to a number (it is granted once, when the
+account is made; existing bootstrap accounts become metered with the
+balance they have) or move every customer to an admin-made account and
+empty `LACRE_API_KEYS` of anything but an operator key.
+
+### The admin API
+
+`/admin/*` takes `LACRE_ADMIN_TOKEN` in `X-Admin-Token`, never an API key.
+Without the variable every admin path answers 503; with it, a missing or
+wrong token is 401. Bodies are JSON.
+
+| method and path | answer |
+|-----------------|--------|
+| `POST /admin/accounts` | `{"name", "credits"}` (`credits` 0 or more, default 0, recorded as an `adjust`). `201 {"api_key", "account"}`; the key is not shown again. |
+| `GET /admin/accounts` | `{"accounts": [...]}`, each as `GET /account` shows it, plus `bootstrap`. |
+| `GET /admin/accounts/{id}` | the account with `ledger`: its newest entries first, `?limit=` 1 to 500 (default 50). |
+| `POST /admin/accounts/{id}/topups` | `{"credits", "external_ref", "note"}` through the manual source. `201 {"topup", "created": true, "account"}`; the same `external_ref` again is `200` with `created` false and the first top-up, and nothing is credited twice; with another amount it is 409. |
+| `POST /admin/accounts/{id}/disable`, `/enable` | the account after the change. |
+
+The admin paths are not in the tunnel's routes by default:
+`deploy/cloudflared.yml.example` has them as a commented-out rule. Call
+them on the VPS against `127.0.0.1:8080`, or publish them only with
+Cloudflare Access in front.
+
+```
+curl -s -X POST http://127.0.0.1:8080/admin/accounts \
+    -H "X-Admin-Token: $ADMIN" -H "Content-Type: application/json" \
+    -d '{"name": "acme", "credits": 0}'
+curl -s -X POST http://127.0.0.1:8080/admin/accounts/<id>/topups \
+    -H "X-Admin-Token: $ADMIN" -H "Content-Type: application/json" \
+    -d '{"credits": 100, "external_ref": "invoice-2026-0042"}'
+```
+
+## Pricing
+
+Prices are in credits and come from the configuration:
+`LACRE_PRICE_ATTEST` (default 1) and `LACRE_PRICE_EXTRACT` (default 1).
+`GET /account` shows them.
+
+- **Hold.** Creating a job, by upload or by mail to a mailbox, holds the
+  attest price, plus the extract price when an extraction is asked for and
+  can run (one known at upload to be skipped, such as a body over the cap,
+  holds nothing for it). The hold comes out of the balance at once. When
+  the balance is short the answer is 402 with
+  `{"detail", "needed", "credits", "shortfall"}`, and nothing is created or
+  staged; mail is dropped, counted in the mailbox's `dropped`, and bounced.
+- **Settle.** When the job ends (`finalized`, `refused` or `failed`), a
+  step is charged only if it produced a record: a Verifier record charges
+  attest, valid or not; an extraction record charges extract, `match`
+  false included, because the Extractor kept its fee for it.
+- **Release.** The rest of the hold goes back: a refusal (refunded on
+  chain), a failure, a skipped or refused extraction.
+
+The job's `cost` shows `held`, and once it ended `charged` and `released`
+(`held` = `charged` + `released`). The hold is taken from the prices at
+creation; a price change applies to jobs created after it.
+
+### The ledger
+
+Every change to a balance is a ledger row: `account_id`, `delta`, `kind`,
+`job_id` or `topup_id`, `note`, `created_at`, written in the same
+transaction as the change.
+
+| kind | delta | when |
+|------|-------|------|
+| `hold` | minus the hold | a job is created |
+| `settle` | 0 | the job ended; `note` says what was charged, attest and extract. The charge is the part of the hold not released, so this row moves nothing. |
+| `release` | plus what was not charged | the job ended with part of its hold unused (no row when all of it was charged) |
+| `topup` | plus the credits | a top-up was credited |
+| `adjust` | plus or minus | an operator change: the credits an account is made with |
+
+The balance is the sum of the ledger, cached on the account. On every start
+the gateway compares the two; a cached balance that differs is logged and
+set to the sum. A ledger that sums below zero stops the start, since it
+means the data was changed by hand. An unlimited account's jobs write no
+ledger rows.
+
+## Top-ups
+
+A top-up credits an account from one external event, named by
+`(source, external_ref)`; the gateway credits each pair once, however often
+it is reported. `lacre_gateway/topups.py` defines the interface
+(`TopUpSource.credit`) and the registry of sources (`SOURCES`). There is one
+source today, `manual`: the operator, through the admin API, after a
+payment made outside the gateway, with the invoice or receipt as
+`external_ref`.
+
+When a payment source exists (a payment provider's webhook, or a watcher of
+GEN deposits to a gateway address), it will be a `TopUpSource` registered
+in `SOURCES`, with its own entry point that verifies the event (the
+provider's signature, or the deposit read at a final block) and calls
+`credit` with the provider's payment id or the deposit's transaction as
+`external_ref`. Customers will then top up themselves; accounts, prices,
+holds and the ledger stay as they are.
+
 ## MCP
 
 `lacre_mcp` gives an agent the API as MCP tools, so it does not have to
@@ -299,6 +434,7 @@ logged.
 | `lacre_extraction(lane, record_id)` | `GET /extractions/{lane}/{id}` |
 | `lacre_sender(domain, selector)` | `GET /senders/{domain}/{selector}` |
 | `lacre_health()` | `GET /health`, with `ok`: a 503 here is the answer "not every check holds", not an error |
+| `lacre_account()` | `GET /account` |
 | `lacre_mailbox_create(extract="auto")` | `POST /mailboxes` |
 | `lacre_mailboxes()` | `GET /mailboxes` |
 | `lacre_mailbox(mailbox_id)` | `GET /mailboxes/{id}` |
@@ -443,7 +579,8 @@ systemctl daemon-reload && systemctl enable --now lacre-gateway
 
 The service listens on 127.0.0.1:8080. `deploy/cloudflared.yml.example` is
 the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
-`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths and `/mcp` only. Check with
+`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths and `/mcp` only, not
+`/admin/*`. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
 
 Mailboxes need `LACRE_INBOUND_SECRET` in `gateway.env` and the Email
@@ -485,7 +622,10 @@ Environment only (see `deploy/gateway.env.example`):
 `LACRE_BODY_BASE_URL` (default: `LACRE_BLOB_BASE_URL` with its last `/h`
 made `/b`), `LACRE_EXTRACT_DEFAULT` (`auto`), `LACRE_MAIL_DOMAIN`
 (`in-sidr.xyz`), `LACRE_INBOUND_SECRET` (at least 32 characters; without
-it `/inbound` answers 503), `LACRE_DATA_DIR`, `LACRE_SIGNING_KEY_FILE` (a path; without it the gateway
+it `/inbound` answers 503), `LACRE_BOOTSTRAP_CREDITS` (0: unlimited
+bootstrap accounts), `LACRE_PRICE_ATTEST` and `LACRE_PRICE_EXTRACT` (1
+each), `LACRE_ADMIN_TOKEN` (at least 32 characters; without it `/admin/*`
+answers 503), `LACRE_DATA_DIR`, `LACRE_SIGNING_KEY_FILE` (a path; without it the gateway
 reads but sends nothing), and the delays `LACRE_POLL_S`,
 `LACRE_FINAL_BOUND_S`, `LACRE_MAX_ATTEMPTS`, `LACRE_MAX_SEND_FAILURES`,
 `LACRE_KEY_QUARANTINE_S`, `LACRE_CONFIRM_MARGIN_S`, `LACRE_CONFIRM_RETRY_S`,
@@ -496,5 +636,5 @@ they do to attest calls. No Extractor address is configured: `extractor` and
 
 ## Out of scope
 
-- Billing, accounts and quotas beyond static API keys.
+- Automated top-ups: no payment source exists yet (see [Top-ups](#top-ups)).
 - A web front end.

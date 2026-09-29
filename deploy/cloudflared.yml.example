@@ -20,8 +20,15 @@ ingress:
   # gateway checks it. /mcp subpaths pass so that the gateway, which routes
   # /mcp and /mcp/, answers the rest with its own 404.
   - hostname: lacre.in-sidr.xyz
-    path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|extractions/(patterns|llm)/[0-9]+|senders/[^/]+/[^/]+|mailboxes(/[a-z2-7]{12}(/jobs)?)?|health|mcp(/.*)?)$
+    path: ^/(attest|jobs/[0-9a-f]{32}|records/[0-9]+|extractions/(patterns|llm)/[0-9]+|senders/[^/]+/[^/]+|mailboxes(/[a-z2-7]{12}(/jobs)?)?|account(/rotate-key)?|health|mcp(/.*)?)$
     service: http://127.0.0.1:8080
+  # The admin API creates accounts and credits them. It is meant for
+  # localhost (curl on the VPS against 127.0.0.1:8080), so it is not routed
+  # here. Uncomment only with a Cloudflare Access application in front of
+  # these paths; X-Admin-Token alone should not face the internet.
+  # - hostname: lacre.in-sidr.xyz
+  #   path: ^/admin/accounts(/[a-z2-7]{12}(/(topups|disable|enable))?)?$
+  #   service: http://127.0.0.1:8080
   # Mail for mailboxes, posted by the Email Worker (deploy/worker). No API
   # key: the gateway checks the HMAC the Worker signs it with.
   - hostname: lacre.in-sidr.xyz

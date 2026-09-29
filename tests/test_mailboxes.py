@@ -152,7 +152,8 @@ def test_a_signed_delivery_creates_a_job_for_the_owner(api):
     job = api.client.get(stub["job"], headers=AUTH).json()
     assert (job["via"], job["mailbox"]) == ("inbound", box["id"])
     assert job["extraction"]["requested"] == "auto"
-    assert api.store.job(stub["job_id"])["owner"] == hashlib.sha256(API_KEY.encode()).hexdigest()
+    owner = api.store.account_by_key(hashlib.sha256(API_KEY.encode()).hexdigest())
+    assert api.store.job(stub["job_id"])["account_id"] == owner["id"]
     body = api.client.get("/mailboxes/%s" % (box["id"],), headers=AUTH).json()
     assert (body["received"], body["dropped"]) == (1, 0)
     assert body["last_received_at"] == "2026-09-21T14:13:50Z"
@@ -408,7 +409,7 @@ def test_a_database_from_before_mailboxes_is_migrated(tmp_path):
     db.execute("DROP TABLE mailboxes")
     db.execute("DROP TABLE inbound_seen")
     db.execute("DROP INDEX jobs_mailbox")
-    for column in ("via", "mailbox", "owner"):
+    for column in ("via", "mailbox"):
         db.execute("ALTER TABLE jobs DROP COLUMN %s" % (column,))
     db.execute("INSERT INTO senders (id, domain, selector, updated_at) "
                "VALUES (1, 'amazon.com', 's', 0)")
@@ -419,6 +420,6 @@ def test_a_database_from_before_mailboxes_is_migrated(tmp_path):
 
     store = Store(path)
     job = store.job("old")
-    assert (job["via"], job["mailbox"], job["owner"]) == (None, None, None)
-    box = store.create_mailbox("o" * 64, "none")
+    assert (job["via"], job["mailbox"], job["account_id"]) == (None, None, None)
+    box = store.create_mailbox("a" * 12, "none")
     assert store.mailbox(box["id"])["enabled"] == 1

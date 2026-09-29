@@ -86,6 +86,16 @@ class Settings:
     # The key the Worker signs inbound mail with. "" turns POST /inbound
     # off: nothing can be delivered without it.
     inbound_secret: str = field(default="", repr=False)
+    # What an account created for a LACRE_API_KEYS entry starts with. 0 makes
+    # those accounts unlimited: a testnet convenience, to be set to a real
+    # number (or the keys moved to admin-created accounts) before mainnet.
+    bootstrap_credits: int = 0
+    # Credits held when a job is created and charged when a step writes a
+    # record: one Verifier record, one extraction record.
+    price_attest: int = 1
+    price_extract: int = 1
+    # The X-Admin-Token of /admin/*. "" turns the admin API off.
+    admin_token: str = field(default="", repr=False)
 
     @property
     def body_url(self):
@@ -140,6 +150,12 @@ def load(env=None):
     if inbound_secret and len(inbound_secret) < MIN_INBOUND_SECRET:
         raise ConfigError("LACRE_INBOUND_SECRET must be at least %d characters"
                           % (MIN_INBOUND_SECRET,))
+    admin_token = env.get("LACRE_ADMIN_TOKEN", "").strip()
+    # The admin token mints credits, so it is held to the inbound secret's
+    # length for the same reason.
+    if admin_token and len(admin_token) < MIN_INBOUND_SECRET:
+        raise ConfigError("LACRE_ADMIN_TOKEN must be at least %d characters"
+                          % (MIN_INBOUND_SECRET,))
     return Settings(
         network=network,
         router=router,
@@ -160,4 +176,8 @@ def load(env=None):
         body_base_url=body_base,
         mail_domain=mail_domain,
         inbound_secret=inbound_secret,
+        bootstrap_credits=_int(env, "LACRE_BOOTSTRAP_CREDITS", 0),
+        price_attest=_int(env, "LACRE_PRICE_ATTEST", 1),
+        price_extract=_int(env, "LACRE_PRICE_EXTRACT", 1),
+        admin_token=admin_token,
     )

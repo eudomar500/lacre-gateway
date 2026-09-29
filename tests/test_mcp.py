@@ -91,7 +91,7 @@ def job(status, **fields):
 def test_the_tools_are_the_documented_set(api):
     names = [t.name for t in anyio.run(api.mcp.list_tools)]
     assert names == ["lacre_attest", "lacre_job", "lacre_wait_job", "lacre_record",
-                     "lacre_extraction", "lacre_sender", "lacre_health",
+                     "lacre_extraction", "lacre_sender", "lacre_health", "lacre_account",
                      "lacre_mailbox_create", "lacre_mailboxes", "lacre_mailbox",
                      "lacre_mailbox_jobs", "lacre_mailbox_disable"]
 
@@ -432,7 +432,7 @@ def test_mcp_tools_use_the_key_of_the_request(api):
     theirs = dict(MCP_HEADERS, **{"X-API-Key": other})
     with TestClient(api.app) as client:
         listed = sse_result(client.post("/mcp", json=rpc("tools/list"), headers=mine))
-        assert len(listed["result"]["tools"]) == 12
+        assert len(listed["result"]["tools"]) == 13
 
         made = sse_result(client.post("/mcp", headers=mine, json=rpc(
             "tools/call", {"name": "lacre_mailbox_create", "arguments": {"extract": "none"}})))
