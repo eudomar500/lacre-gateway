@@ -1,7 +1,8 @@
 /* Lacre page state: what survives a reload, and who is told when it moves.
  *
- * Four values, each with get, set and subscribe: key, jobId, account and
- * wallet. Where each one lives is decided here and nowhere else:
+ * Five values, each with get, set and subscribe: key, jobId, account,
+ * wallet and pendingTx. Where each one lives is decided here and nowhere
+ * else:
  *
  *   key      sessionStorage, and only while "Remember for this session" is
  *            on. The tab forgets it when it closes. Never localStorage.
@@ -13,6 +14,12 @@
  *            trusted on load: reconnectWallet() asks the wallet with
  *            eth_accounts, which never prompts, and clears it if the wallet
  *            no longer grants it.
+ *   pendingTx the wallet's attest_inline in flight, in localStorage: its
+ *            EVM hash from the moment the wallet returns it, then its
+ *            consensus tx id, and what the page read before sending (the
+ *            Verifier, the fee, the sender's record count). A reload, or a
+ *            visit the next day, follows it to FINALIZED from there. Only
+ *            public chain data is kept: the headers were in the calldata.
  *
  * The remember switch is itself a durable choice and lives in localStorage.
  * Every storage call is wrapped: a private window or blocked storage costs
@@ -25,9 +32,12 @@
   var JOB_SLOT = 'lacre.job';
   var WALLET_SLOT = 'lacre.wallet';
   var REMEMBER_SLOT = 'lacre.remember';
+  var PENDING_SLOT = 'lacre.walletTx';
+  var DURABLE = [WALLET_SLOT, REMEMBER_SLOT, PENDING_SLOT];
   var JOB_PARAM = 'job';
   var JOB_ID = /^[0-9a-f]{32}$/;
   var ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+  var HASH = /^0x[0-9a-fA-F]{64}$/;
 
   function session(slot, value) {
     try {
@@ -41,7 +51,7 @@
 
   // The durable slots are named here so nothing else can land in them.
   function durable(slot, value) {
-    if (slot !== WALLET_SLOT && slot !== REMEMBER_SLOT) { throw new Error('not a durable slot: ' + slot); }
+    if (DURABLE.indexOf(slot) < 0) { throw new Error('not a durable slot: ' + slot); }
     try {
       if (value === undefined) { return localStorage.getItem(slot) || ''; }
       if (value) { localStorage.setItem(slot, value); } else { localStorage.removeItem(slot); }
@@ -68,6 +78,17 @@
     }
   }
 
+  // A stored transaction is taken back only in the shape the page writes:
+  // a sender, the Verifier it went to, a fee, and an EVM hash or a tx id.
+  function pendingFrom(text) {
+    var tx;
+    try { tx = JSON.parse(text || 'null'); } catch (error) { return null; }
+    if (!tx || typeof tx !== 'object' || !ADDRESS.test(tx.from) || !ADDRESS.test(tx.verifier)) { return null; }
+    if (!/^\d+$/.test(String(tx.fee)) || !/^\d+$/.test(String(tx.before))) { return null; }
+    if (!HASH.test(tx.evm || '') && !HASH.test(tx.tx || '')) { return null; }
+    return tx;
+  }
+
   var remember = durable(REMEMBER_SLOT) !== '0';
   var storedWallet = durable(WALLET_SLOT);
   var values = {
@@ -75,9 +96,10 @@
     // The URL wins: a link someone opened names the job they meant.
     jobId: jobFromUrl() || (JOB_ID.test(session(JOB_SLOT)) ? session(JOB_SLOT) : ''),
     account: null,
-    wallet: ADDRESS.test(storedWallet) ? storedWallet : null
+    wallet: ADDRESS.test(storedWallet) ? storedWallet : null,
+    pendingTx: pendingFrom(durable(PENDING_SLOT))
   };
-  var listeners = { key: [], jobId: [], account: [], wallet: [] };
+  var listeners = { key: [], jobId: [], account: [], wallet: [], pendingTx: [] };
 
   function persist(name, value) {
     if (name === 'key') { session(KEY_SLOT, remember ? value : ''); }
@@ -86,6 +108,7 @@
       writeJobToUrl(value);
     }
     if (name === 'wallet') { durable(WALLET_SLOT, value || ''); }
+    if (name === 'pendingTx') { durable(PENDING_SLOT, value ? JSON.stringify(value) : ''); }
   }
 
   function get(name) { return values[name]; }

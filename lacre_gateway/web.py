@@ -5,6 +5,11 @@ per request. They call the API on the same origin with the key the visitor
 pastes, which the page keeps in memory or, if the visitor lets it, in the
 tab's sessionStorage, never anywhere longer lived; so serving them needs no
 key and they read nothing a key does not already read.
+
+A visitor with a wallet and no key attests without the gateway: the page
+cuts the signed headers itself (web/dkim.js), the wallet signs attest_inline
+and the page follows the transaction on the Bradbury RPC with genlayer-js,
+which is served under /static like everything else. No job is created.
 """
 
 import collections
@@ -32,12 +37,16 @@ REDIRECTS = {
     "/access.html": "/#access",
 }
 FAVICON = "favicon.svg"
+# The chain the wallet path reads and follows its transaction on. The wallet
+# signs; every read, and the fee and gas estimates, go to this RPC.
+BRADBURY_RPC = "https://rpc-bradbury.genlayer.com"
 # The pages load their own script, style and fonts only, and talk to this
-# origin only, so an injected script or a framing page gets nowhere. A key
-# pasted into the page is sent to this origin and nowhere else.
+# origin and the Bradbury RPC only, so an injected script or a framing page
+# gets nowhere. A key pasted into the page is sent to this origin and
+# nowhere else: the page never puts it on a call to the RPC.
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
-       "img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; "
-       "frame-ancestors 'none'")
+       "img-src 'self' data:; connect-src 'self' " + BRADBURY_RPC + "; form-action 'self'; "
+       "base-uri 'none'; frame-ancestors 'none'")
 PAGE_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
@@ -160,14 +169,16 @@ def add_pages(app, web_dir=WEB_DIR):
     web_dir = Path(web_dir)
     if not web_dir.is_dir():
         return False
+    # HEAD too: a link checker or a crawler asks with HEAD, and FastAPI,
+    # unlike /static, does not answer it for a GET route by itself.
     for path, name in PAGES.items():
-        app.add_api_route(path, page_endpoint(web_dir / name), methods=["GET"],
+        app.add_api_route(path, page_endpoint(web_dir / name), methods=["GET", "HEAD"],
                           include_in_schema=False, name="page:" + name)
     for path, target in REDIRECTS.items():
-        app.add_api_route(path, redirect_endpoint(target), methods=["GET"],
+        app.add_api_route(path, redirect_endpoint(target), methods=["GET", "HEAD"],
                           include_in_schema=False, name="redirect:" + path)
-    app.add_api_route("/" + FAVICON, favicon_endpoint(web_dir / FAVICON), methods=["GET"],
-                      include_in_schema=False, name="favicon")
+    app.add_api_route("/" + FAVICON, favicon_endpoint(web_dir / FAVICON),
+                      methods=["GET", "HEAD"], include_in_schema=False, name="favicon")
     app.mount("/static", WebFiles(directory=web_dir), name="static")
     return True
 

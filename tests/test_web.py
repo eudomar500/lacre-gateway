@@ -16,9 +16,15 @@ from lacre_gateway.web import (ACCESS_PER_IP, ACCESS_WINDOW_S, PAGES, REDIRECTS,
 ADMIN_TOKEN = "test-admin-" + "t" * 32
 ADMIN = {"X-Admin-Token": ADMIN_TOKEN}
 AUTH = {"X-API-Key": API_KEY}
-# The only hosts a page may name: the public gateway and the chain explorer
-# its job answers link to. Everything else the pages load is on /static.
-ALLOWED_HOSTS = {"lacre.in-sidr.xyz", "explorer-bradbury.genlayer.com"}
+# The only hosts a page may name: the public gateway, the chain explorer
+# its job answers link to, the Bradbury RPC the wallet path reads, the
+# testnet faucet and the public Lacre repository the Integrate block links
+# to. Everything the pages load is on /static.
+ALLOWED_HOSTS = {"lacre.in-sidr.xyz", "explorer-bradbury.genlayer.com",
+                 "rpc-bradbury.genlayer.com", "testnet-faucet.genlayer.foundation", "github.com"}
+# Kept verbatim like the font licenses: the genlayer-js build names the
+# hosts of every chain it knows, and loads none of them but the RPC.
+VERBATIM = {"genlayer-js-1.2.0.min.js", "genlayer-js-1.2.0.LICENSE.txt"}
 URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'<>)]*")
 TEXT_SUFFIXES = {".html", ".css", ".js", ".txt", ".svg"}
 # An SVG names its namespace as a URL; nothing is fetched from it.
@@ -65,7 +71,8 @@ def test_every_page_is_served_without_a_key(web, path):
 
 @pytest.mark.parametrize("path,kind", [
     ("/static/app.css", "text/css"), ("/static/app.js", "javascript"),
-    ("/static/state.js", "javascript"), ("/favicon.svg", "image/svg+xml"),
+    ("/static/state.js", "javascript"), ("/static/dkim.js", "javascript"),
+    ("/static/wallet.js", "javascript"), ("/favicon.svg", "image/svg+xml"),
     ("/static/fonts/jost-latin.woff2", "font/woff2"),
     ("/static/fonts/jetbrains-mono-latin.woff2", "font/woff2")])
 def test_the_assets_are_served_without_a_key(web, path, kind):
@@ -112,7 +119,7 @@ def test_the_web_directory_names_no_host_but_the_two_allowed():
             continue
         # The font licenses are kept verbatim, and the OFL names its own
         # home and the font project's; nothing loads from them.
-        if path.name.startswith("OFL-"):
+        if path.name.startswith("OFL-") or path.name in VERBATIM:
             continue
         for url in URL.findall(XMLNS.sub("", path.read_text(encoding="ascii"))):
             host = url.split("://", 1)[1].split("/", 1)[0]
@@ -128,6 +135,15 @@ def test_the_web_directory_is_ascii():
             path.read_bytes().decode("ascii")
 
 
+def test_no_page_shows_an_em_dash():
+    # An empty value reads "-"; the entity and the escape would put the
+    # glyph back on the page while the files stay ASCII.
+    for path in web_files():
+        if path.suffix in TEXT_SUFFIXES and path.name not in VERBATIM:
+            text = path.read_text(encoding="ascii")
+            assert "&mdash;" not in text and "\\u2014" not in text, path.name
+
+
 def test_every_font_has_its_license_next_to_it():
     fonts = WEB_DIR / "fonts"
     names = {p.name for p in fonts.iterdir()}
@@ -138,9 +154,10 @@ def test_every_font_has_its_license_next_to_it():
 
 
 def test_only_the_store_touches_storage():
-    script = (WEB_DIR / "app.js").read_text(encoding="ascii")
-    for word in ("localStorage", "sessionStorage", "document.cookie", "indexedDB"):
-        assert word not in script
+    for name in ("app.js", "wallet.js", "dkim.js"):
+        script = (WEB_DIR / name).read_text(encoding="ascii")
+        for word in ("localStorage", "sessionStorage", "document.cookie", "indexedDB"):
+            assert word not in script, name
     store = (WEB_DIR / "state.js").read_text(encoding="ascii")
     assert "document.cookie" not in store and "indexedDB" not in store
 
@@ -148,12 +165,14 @@ def test_only_the_store_touches_storage():
 def test_the_key_never_reaches_local_storage():
     store = (WEB_DIR / "state.js").read_text(encoding="ascii")
     # localStorage is reached through durable() alone, which takes only the
-    # wallet and the remember switch; the key goes through session().
+    # wallet, the remember switch and the wallet's transaction in flight;
+    # the key goes through session().
     calls = re.compile(r"localStorage\.\w+")
     body = store[store.index("function durable("):]
     body = body[:body.index("\n  }\n") + 4]
     assert len(calls.findall(store)) == len(calls.findall(body)) == 3
-    assert "if (slot !== WALLET_SLOT && slot !== REMEMBER_SLOT)" in body
+    assert "if (DURABLE.indexOf(slot) < 0)" in body
+    assert "var DURABLE = [WALLET_SLOT, REMEMBER_SLOT, PENDING_SLOT];" in store
     assert "durable(KEY_SLOT" not in store
     assert "session(KEY_SLOT, remember ? value : '')" in store
 

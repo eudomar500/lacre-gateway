@@ -21,6 +21,8 @@ The web app (web.py) is served at / and /static with no key: its files are
 the same for everyone, and every call it makes carries the visitor's key.
 POST /access-request takes no key either, since whoever uses it has none;
 it is rate limited per address and stores only what the form asks for.
+GET /primitives takes none: it answers which contracts the Router names,
+which is public chain state, from a copy at most ten minutes old.
 """
 
 import datetime
@@ -28,6 +30,7 @@ import hashlib
 import hmac
 import logging
 import re
+import threading
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -44,7 +47,7 @@ from .blobs import BODY, BlobStore
 from .chainio import ChainUnavailable
 from .config import EXTRACT_MODES
 from .contracts import LANES, confirm_after, sender_state
-from .store import InsufficientCredits, TopUpConflict
+from .store import OPEN, InsufficientCredits, TopUpConflict
 from .topups import ManualTopUp
 from .vendor import attest
 from .web import WEB_DIR, AccessRequest, RateLimit, add_pages, client_address
@@ -64,6 +67,14 @@ ACCOUNT_ID = MAILBOX_ID
 SIGNATURE = re.compile(r"^[0-9a-f]{64}$")
 PAGE_MAX = 100
 LEDGER_MAX = 500
+# GET /jobs?status=: what each filter takes in.
+JOB_FILTERS = {"open": OPEN, "finalized": ("finalized",), "refused": ("refused",),
+               "failed": ("failed",)}
+# /primitives is answered from a copy of the Router's reading this old at
+# most. A reading that found no Router is kept for PRIMITIVES_RETRY_S only,
+# so a chain outage heals soon without every visitor reading the chain.
+PRIMITIVES_TTL_S = 600
+PRIMITIVES_RETRY_S = 30
 
 
 class PaymentRequired(HTTPException):
@@ -377,6 +388,27 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
             body = None
         return {"job_id": job_id, "status": "pending", "job": "/jobs/%s" % (job_id,),
                 "extract": mode}
+
+    @app.get("/jobs")
+    def list_jobs(account: dict = Depends(require_key), status: str | None = None,
+                  limit: int = Query(20, ge=1, le=PAGE_MAX), offset: int = Query(0, ge=0)):
+        # The caller's own jobs only, and only what finds them again: the
+        # id, where it is and when. GET /jobs/{id} has the rest.
+        if status is not None and status not in JOB_FILTERS:
+            raise HTTPException(status_code=422, detail="status must be one of %s"
+                                % (", ".join(JOB_FILTERS),))
+        rows = store.account_jobs(account["id"], JOB_FILTERS.get(status), limit + 1, offset)
+        more = len(rows) > limit
+        query = ("status=%s&" % (status,) if status else "") + "limit=%d&offset=%d"
+        return {
+            "jobs": [{"id": r["id"], "status": r["status"], "stage": r["stage"],
+                      "created_at": iso(r["created_at"]), "updated_at": iso(r["updated_at"]),
+                      "finished_at": iso(r["finished_at"])} for r in rows[:limit]],
+            "status": status,
+            "limit": limit,
+            "offset": offset,
+            "next": "/jobs?" + query % (limit, offset + limit) if more else None,
+        }
 
     @app.get("/jobs/{job_id}")
     def get_job(job_id: str, account: dict = Depends(require_key)):
@@ -791,6 +823,25 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         flags = {name: bool(addresses[name]) for name in
                  ("router", "keycache", "verifier", "extractor_patterns", "extractor_llm")}
         return {"layers": flags, "addresses": {name: addresses[name] for name in flags}}
+
+    primitives_copy = {"body": None, "until": 0.0}
+    primitives_lock = threading.Lock()
+
+    @app.get("/primitives")
+    def primitives():
+        """The five layers as the Router names them at LATEST_FINAL, for a
+        page without a key. One reading serves everyone for ten minutes;
+        the lock keeps a burst of visitors to one reading of the chain."""
+        with primitives_lock:
+            now = clock()
+            if primitives_copy["body"] is None or now >= primitives_copy["until"]:
+                found = layers(True)
+                primitives_copy["body"] = dict(network=settings.network, read_at=iso(now), **found)
+                primitives_copy["until"] = now + (PRIMITIVES_TTL_S if found["layers"]["router"]
+                                                  else PRIMITIVES_RETRY_S)
+            body, left = primitives_copy["body"], primitives_copy["until"] - now
+        return JSONResponse(content=body, headers={
+            "Cache-Control": "public, max-age=%d" % (max(0, int(left)),)})
 
     @app.get("/h/{token}")
     def served_headers(token: str):

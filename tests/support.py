@@ -21,6 +21,7 @@ extract_outcome, so every outcome is deterministic.
 
 import base64
 import json
+import os
 import re
 from pathlib import Path
 
@@ -32,7 +33,11 @@ from lacre_gateway.vendor import dkimcore, txstate
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 ROOT = Path(__file__).resolve().parents[1]
-ABI = testnet_bradbury.consensus_data_contract["abi"]
+# The Lacre checkout the web app is compared against: the submodule, or
+# another checkout named in LACRE_SOURCE (a newer commit, before the
+# submodule is moved to it).
+LACRE_SOURCE = Path(os.environ.get("LACRE_SOURCE") or ROOT / "vendor" / "lacre")
+ABI =testnet_bradbury.consensus_data_contract["abi"]
 
 ROUTER = "0x" + "a1" * 20
 VERIFIER = "0x" + "b2" * 20

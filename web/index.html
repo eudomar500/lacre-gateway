@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lacre</title>
-<meta name="description" content="Attest a signed email on GenLayer and read what it says, agreed by consensus.">
+<meta name="description" content="A signed-email primitive on GenLayer: require_attestation in your contract, attestations from the gateway, a mailbox, MCP or your own wallet.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/state.js" defer></script>
+<script src="/static/dkim.js" defer></script>
+<script src="/static/wallet.js" defer></script>
 <script src="/static/app.js" defer></script>
 </head>
 <body class="app" data-page="app">
@@ -56,29 +58,31 @@
       </div>
       <div class="side-sect">
         <div class="label">CONTRACT LAYERS</div>
-        <div class="layer" data-layer="router"><span class="lt off"></span><span class="layer-no">01</span><span class="layer-nm">Router</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-        <div class="layer" data-layer="keycache"><span class="lt off"></span><span class="layer-no">02</span><span class="layer-nm">Key cache</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-        <div class="layer" data-layer="verifier"><span class="lt off"></span><span class="layer-no">03</span><span class="layer-nm">Verifier</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-        <div class="layer" data-layer="extractor_patterns"><span class="lt off"></span><span class="layer-no">04</span><span class="layer-nm">Extractor (patterns)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-        <div class="layer" data-layer="extractor_llm"><span class="lt off"></span><span class="layer-no">05</span><span class="layer-nm">Extractor (LLM)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
+        <div class="layer" data-layer="router"><span class="lt off"></span><span class="layer-no">01</span><span class="layer-nm">Router</span><span class="fill"></span><span class="layer-st">-</span></div>
+        <div class="layer" data-layer="keycache"><span class="lt off"></span><span class="layer-no">02</span><span class="layer-nm">Key cache</span><span class="fill"></span><span class="layer-st">-</span></div>
+        <div class="layer" data-layer="verifier"><span class="lt off"></span><span class="layer-no">03</span><span class="layer-nm">Verifier</span><span class="fill"></span><span class="layer-st">-</span></div>
+        <div class="layer" data-layer="extractor_patterns"><span class="lt off"></span><span class="layer-no">04</span><span class="layer-nm">Extractor (patterns)</span><span class="fill"></span><span class="layer-st">-</span></div>
+        <div class="layer" data-layer="extractor_llm"><span class="lt off"></span><span class="layer-no">05</span><span class="layer-nm">Extractor (LLM)</span><span class="fill"></span><span class="layer-st">-</span></div>
       </div>
       <div class="side-sect tight">
         <div class="label">PRICES &middot; CREDITS</div>
-        <div class="kv"><span>Attest</span><span class="fill"></span><span class="v" data-price="attest">&mdash;</span></div>
-        <div class="kv"><span>Extract</span><span class="fill"></span><span class="v" data-price="extract">&mdash;</span></div>
+        <div class="kv"><span>Attest</span><span class="fill"></span><span class="v" data-price="attest">-</span></div>
+        <div class="kv"><span>Extract</span><span class="fill"></span><span class="v" data-price="extract">-</span></div>
       </div>
       <div class="side-sect tight">
         <div class="label">JOBS</div>
-        <div class="kv"><span>Open</span><span class="fill"></span><span class="v" data-count="open">&mdash;</span></div>
-        <div class="kv"><span>Finalized</span><span class="fill"></span><span class="v" data-count="finalized">&mdash;</span></div>
-        <div class="kv"><span>Refused</span><span class="fill"></span><span class="v" data-count="refused">&mdash;</span></div>
-        <div class="kv"><span>Failed</span><span class="fill"></span><span class="v" data-count="failed">&mdash;</span></div>
-        <div class="kv"><span>Mailboxes</span><span class="fill"></span><span class="v" data-count="mailboxes">&mdash;</span></div>
+        <button class="kv kv-btn" type="button" data-filter="open" aria-pressed="false"><span>Open</span><span class="fill"></span><span class="v" data-count="open">-</span></button>
+        <button class="kv kv-btn" type="button" data-filter="finalized" aria-pressed="false"><span>Finalized</span><span class="fill"></span><span class="v" data-count="finalized">-</span></button>
+        <button class="kv kv-btn" type="button" data-filter="refused" aria-pressed="false"><span>Refused</span><span class="fill"></span><span class="v" data-count="refused">-</span></button>
+        <button class="kv kv-btn" type="button" data-filter="failed" aria-pressed="false"><span>Failed</span><span class="fill"></span><span class="v" data-count="failed">-</span></button>
+        <div class="kv"><span>Mailboxes</span><span class="fill"></span><span class="v" data-count="mailboxes">-</span></div>
+        <div class="jobs" id="jobs" aria-label="Your jobs, newest first"></div>
+        <button class="linkbtn jobs-more" id="jobsMore" type="button" hidden>More</button>
       </div>
       <div class="side-sect tight top">
         <div class="label">BALANCE</div>
         <div class="balance" id="balance" hidden><span class="balance-n" id="balanceN"></span><span class="balance-u">CR</span></div>
-        <div class="balance-none" id="balanceNone"><span class="balance-n">&mdash;</span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><circle cx="164" cy="92" r="52"/><line x1="127" y1="129" x2="40" y2="216"/><line x1="64" y1="192" x2="88" y2="216"/><line x1="92" y1="164" x2="116" y2="188"/></svg></div>
+        <div class="balance-none" id="balanceNone"><span class="balance-n">-</span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><circle cx="164" cy="92" r="52"/><line x1="127" y1="129" x2="40" y2="216"/><line x1="64" y1="192" x2="88" y2="216"/><line x1="92" y1="164" x2="116" y2="188"/></svg></div>
       </div>
     </div>
     <div class="side-mini" aria-hidden="true">
@@ -103,17 +107,17 @@
       <span class="lt lt-6 off" data-base="lt lt-6" data-layer-lt="extractor_llm"></span>
     </span>
     <span class="fill"></span>
-    <span class="mstrip-bal" id="mBal">&mdash; cr</span>
+    <span class="mstrip-bal" id="mBal">- cr</span>
     <svg class="ic ic-down" viewBox="0 0 256 256" aria-hidden="true"><polyline points="208 96 128 176 48 96"/></svg>
     <svg class="ic ic-up" viewBox="0 0 256 256" aria-hidden="true"><polyline points="48 160 128 80 208 160"/></svg>
   </button>
   <div class="minfo" id="minfo">
-    <div class="layer" data-layer="router"><span class="layer-no">01</span><span class="layer-nm">Router</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-    <div class="layer" data-layer="keycache"><span class="layer-no">02</span><span class="layer-nm">Key cache</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-    <div class="layer" data-layer="verifier"><span class="layer-no">03</span><span class="layer-nm">Verifier</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-    <div class="layer" data-layer="extractor_patterns"><span class="layer-no">04</span><span class="layer-nm">Extractor (patterns)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-    <div class="layer" data-layer="extractor_llm"><span class="layer-no">05</span><span class="layer-nm">Extractor (LLM)</span><span class="fill"></span><span class="layer-st">&mdash;</span></div>
-    <div class="minfo-foot" id="mPrices"><span>attest &mdash; cr</span><span>extract &mdash; cr</span></div>
+    <div class="layer" data-layer="router"><span class="layer-no">01</span><span class="layer-nm">Router</span><span class="fill"></span><span class="layer-st">-</span></div>
+    <div class="layer" data-layer="keycache"><span class="layer-no">02</span><span class="layer-nm">Key cache</span><span class="fill"></span><span class="layer-st">-</span></div>
+    <div class="layer" data-layer="verifier"><span class="layer-no">03</span><span class="layer-nm">Verifier</span><span class="fill"></span><span class="layer-st">-</span></div>
+    <div class="layer" data-layer="extractor_patterns"><span class="layer-no">04</span><span class="layer-nm">Extractor (patterns)</span><span class="fill"></span><span class="layer-st">-</span></div>
+    <div class="layer" data-layer="extractor_llm"><span class="layer-no">05</span><span class="layer-nm">Extractor (LLM)</span><span class="fill"></span><span class="layer-st">-</span></div>
+    <div class="minfo-foot" id="mPrices"><span>attest - cr</span><span>extract - cr</span></div>
   </div>
 
   <div class="stagearea" id="stagearea">
@@ -130,7 +134,18 @@
         <div class="stage-eta" id="stageEta">Drop a signed .eml</div>
         <div class="ticks" id="ticks"></div>
       </div>
+      <div class="hero" id="hero">
+        <p class="hero-a"><a href="#integrate">Integrate:</a> <span class="mono">require_attestation</span> in your contract.</p>
+        <p class="hero-b">Produce attestations: gateway, mailbox or MCP with credits, or your own wallet paying the fee.</p>
+      </div>
     </div>
+    <svg class="cables" id="cables" aria-hidden="true">
+      <path class="cable gray" id="cablePlug" hidden/>
+      <path class="cable-pulse gray" id="cablePlugPulse" hidden/>
+      <path class="cable" id="cableWallet" hidden/>
+      <path class="cable-pulse" id="cableWalletPulse" hidden/>
+      <g class="port" id="diskPort" hidden><circle r="6"/><circle class="port-in" r="2.5"/></g>
+    </svg>
 
     <div class="cards">
       <section class="card card-in" id="cardIn" aria-label="Input">
@@ -169,7 +184,12 @@
           </button>
           <textarea class="paste" id="paste" placeholder="Raw message source" spellcheck="false" hidden></textarea>
           <input type="file" id="file" accept=".eml,message/rfc822" hidden>
-          <div class="field">
+          <div class="wchip" id="walletChip" hidden>
+            <span class="lt final" id="walletChipLt"></span>
+            <span class="wchip-t" id="walletChipT"></span>
+            <button class="linkbtn" id="useKey" type="button">Use an API key</button>
+          </div>
+          <div class="field" id="keyField">
             <label class="label" for="key">API KEY</label>
             <div class="box">
               <input type="password" id="key" placeholder="API key" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -183,7 +203,7 @@
               <span class="switch-t">Remember for this session</span>
             </label>
           </div>
-          <div class="field">
+          <div class="field" id="modeField">
             <span class="label">EXTRACTION</span>
             <div class="pills" role="group" aria-label="Extraction">
               <button class="pill" type="button" data-mode="auto" aria-pressed="true">auto</button>
@@ -192,7 +212,7 @@
               <button class="pill" type="button" data-mode="none" aria-pressed="false">none</button>
             </div>
           </div>
-          <button class="btn-main" id="attest" type="button" disabled><span class="lt lt-7 idle"></span>ATTEST</button>
+          <button class="btn-main" id="attest" type="button" disabled><span class="lt lt-7 idle"></span><span id="attestT">ATTEST</span></button>
           <button class="linkbtn resume-link" id="resumeLink" type="button" aria-expanded="false" aria-controls="resumeBox">Resume a job</button>
           <div class="field" id="resumeBox" hidden>
             <label class="label" for="resume">JOB ID</label>
@@ -213,11 +233,13 @@
           <span class="tag-prov" id="outProv">PROVISIONAL</span>
           <span class="tag-final" id="outFinal" hidden>FINALIZED</span>
         </div>
-        <div class="orow"><span class="orow-k">Job id</span><span class="orow-v" id="oJob"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="job"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
+        <div class="orow" id="oReqRow" hidden><span class="orow-k">Requester</span><span class="orow-v" id="oReq"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="req"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
+        <div class="orow" id="oJobRow"><span class="orow-k">Job id</span><span class="orow-v" id="oJob"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="job"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
         <div class="orow"><span class="orow-k">Sender domain</span><span class="orow-v" id="oDom"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="dom"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
         <div class="orow"><span class="orow-k">Record id</span><span class="orow-v" id="oRec"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="rec"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
         <div class="orow tx" id="oTxRow"><span class="orow-k">Attest tx</span><span class="orow-v" id="oTx"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="tx"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" id="oTxLink" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
         <div class="orow tx" id="oXtxRow"><span class="orow-k">Extract tx</span><span class="orow-v" id="oXtx"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="xtx"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" id="oXtxLink" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+        <p class="ex-wallet" id="exWallet" hidden>Extraction: use the gateway or your own body URL, see <a href="https://github.com/eudomar500/lacre/blob/main/docs/direct-use.md#extract-from-the-body-extract" target="_blank" rel="noopener noreferrer">direct-use.md</a></p>
         <div class="checks">
           <div class="check"><span class="lt provisional" id="ckValid"></span>VALID</div>
           <div class="check"><span class="lt provisional" id="ckAligned"></span>ALIGNED</div>
@@ -298,13 +320,13 @@
 <section class="page sect" id="how">
   <h2 class="eyebrow">HOW IT WORKS</h2>
   <ol class="how-mods" aria-label="Stages">
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">01</span><span class="lt lt-9 idle"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Queued</span><span class="mod-eta">&lt; 1 min</span></div></div><span class="mod-gap"></span></li>
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">02</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Attesting</span><span class="mod-eta">&asymp; 2 min</span></div></div><span class="mod-gap"></span></li>
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">03</span><span class="lt lt-9 provisional"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">04</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Serving body</span><span class="mod-eta">&asymp; 1 min</span></div></div><span class="mod-gap"></span></li>
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">05</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Extracting</span><span class="mod-eta">&asymp; 3 min</span></div></div><span class="mod-gap"></span></li>
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">06</span><span class="lt lt-9 provisional"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
-    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">07</span><span class="lt lt-9 final"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Recorded</span><span class="mod-eta">&mdash;</span></div></div></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">01</span><span class="lt lt-9 idle"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="hub" cx="36" cy="22" rx="6" ry="3.4"/><path class="hi" d="M36 5A30 17 0 0 1 59.5 11.4"/><line x1="36" y1="2" x2="36" y2="8"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Queued</span><span class="mod-eta">&lt; 1 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">02</span><span class="lt lt-9 running"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="hub" cx="36" cy="22" rx="6" ry="3.4"/><path class="hi" d="M36 5A30 17 0 0 1 65.2 25.8"/><line x1="36" y1="2" x2="36" y2="8"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Attesting</span><span class="mod-eta">&asymp; 2 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">03</span><span class="lt lt-9 provisional"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="hub" cx="36" cy="22" rx="6" ry="3.4"/><path class="hi" d="M36 5A30 17 0 0 1 49 37.3"/><line x1="36" y1="2" x2="36" y2="8"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">04</span><span class="lt lt-9 running"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="hub" cx="36" cy="22" rx="6" ry="3.4"/><path class="hi" d="M36 5A30 17 0 1 1 23 37.3"/><line x1="36" y1="2" x2="36" y2="8"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Serving body</span><span class="mod-eta">&asymp; 1 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">05</span><span class="lt lt-9 running"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="hub" cx="36" cy="22" rx="6" ry="3.4"/><path class="hi" d="M36 5A30 17 0 1 1 6.8 25.8"/><line x1="36" y1="2" x2="36" y2="8"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Extracting</span><span class="mod-eta">&asymp; 3 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">06</span><span class="lt lt-9 provisional"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="hub" cx="36" cy="22" rx="6" ry="3.4"/><path class="hi" d="M36 5A30 17 0 1 1 12.5 11.4"/><line x1="36" y1="2" x2="36" y2="8"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">07</span><span class="lt lt-9 final"></span></div><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><ellipse cx="36" cy="22" rx="30" ry="17"/><ellipse cx="36" cy="22" rx="19" ry="10.8"/><ellipse class="on" cx="36" cy="22" rx="6" ry="3.4"/><ellipse class="hi" cx="36" cy="22" rx="30" ry="17"/></svg><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Recorded</span><span class="mod-eta">-</span></div></div></li>
   </ol>
   <div class="how-text">
     <p>Drop a signed email and GenLayer validators fetch the sender's keys and check the signature by consensus.</p>
@@ -315,40 +337,90 @@
 
 <section class="page sect" id="primitives">
   <h2 class="eyebrow">PRIMITIVES</h2>
+  <p class="prim-lead">Records live here; your contract reads them by id.</p>
+  <div class="integrate" id="integrate">
+    <div class="integrate-head">
+      <span class="label">INTEGRATE</span>
+      <span class="integrate-t"><span class="mono">require_attestation</span> asks the Verifier the Router names now, and reads it at FINALIZED only.</span>
+    </div>
+    <div class="code snippet-code">
+      <pre class="snippet" id="integrateCode">def final(address):
+    # A record read before FINALIZED can still be appealed away (rule 1), so
+    # nothing here reads any other state.
+    return gl.get_contract_at(address).view(state=StorageType.LATEST_FINAL)
+
+
+def resolved(router, name):
+    # Resolved on every use and never stored: when the Router moves a name
+    # after its 48 hour notice, this contract follows without a redeploy.
+    found = str(final(router).resolve(name))
+    return Address(found) if found else None
+
+
+def attested(router, record_id, domain, min_key_bits):
+    """(Verifier, record) for a record that passes check_for, or (None, {}).
+
+    Never raises: an unreadable Router or Verifier reads as no attestation.
+    """
+    try:
+        verifier = resolved(router, "verifier")
+        if verifier is None:
+            return None, {}
+        record = dict(final(verifier).get(record_id))
+        if not record:
+            return None, {}
+        # check_for binds a requester. This app accepts a record whoever paid
+        # for it, since the requester proves nothing about who received the
+        # message (rule 6), so the record's own is passed and the Verifier's
+        # own comparisons decide validity, alignment, domain and key size
+        # (rule 3). An app that pays out to the requester passes its own.
+        ok = final(verifier).check_for(record_id, str(domain), int(min_key_bits),
+                                       str(record.get("requester", "")))
+        return (verifier, record) if ok is True else (None, {})
+    except Exception:
+        return None, {}
+</pre>
+      <button class="code-copy" type="button" title="Copy" data-copy-from="integrateCode"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+    </div>
+    <div class="integrate-links">
+      <a href="https://github.com/eudomar500/lacre/blob/main/integrations/consumer_example.py" target="_blank" rel="noopener noreferrer">Full example</a>
+      <a href="https://github.com/eudomar500/lacre/blob/main/docs/direct-use.md" target="_blank" rel="noopener noreferrer">Use the contracts directly</a>
+    </div>
+  </div>
   <div class="prims">
     <div class="module prim" data-prim="router">
       <div class="prim-top"><span class="prim-no">01</span><span class="lt lt-9 off"></span></div>
       <h3 class="prim-n">Router</h3>
       <p class="prim-d">Resolves each role to its current contract, so a new version needs no client change.</p>
-      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+      <div class="prim-addr"><span class="prim-v">-</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
     </div>
     <div class="module prim" data-prim="keycache">
       <div class="prim-top"><span class="prim-no">02</span><span class="lt lt-9 off"></span></div>
       <h3 class="prim-n">Key cache</h3>
       <p class="prim-d">Holds the sender keys the validators agreed on, with a quarantine for a domain seen the first time.</p>
-      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+      <div class="prim-addr"><span class="prim-v">-</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
     </div>
     <div class="module prim" data-prim="verifier">
       <div class="prim-top"><span class="prim-no">03</span><span class="lt lt-9 off"></span></div>
       <h3 class="prim-n">Verifier</h3>
       <p class="prim-d">Checks a signed email against the cached key and records whether it is valid and aligned.</p>
-      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+      <div class="prim-addr"><span class="prim-v">-</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
     </div>
     <div class="module prim" data-prim="extractor_patterns">
       <div class="prim-top"><span class="prim-no">04</span><span class="lt lt-9 off"></span></div>
       <h3 class="prim-n">Extractor (patterns)</h3>
       <p class="prim-d">Reads the fields of a message with patterns agreed per sender domain.</p>
-      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+      <div class="prim-addr"><span class="prim-v">-</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
     </div>
     <div class="module prim" data-prim="extractor_llm">
       <div class="prim-top"><span class="prim-no">05</span><span class="lt lt-9 off"></span></div>
       <h3 class="prim-n">Extractor (LLM)</h3>
       <p class="prim-d">Reads the fields of a message with a model, accepted only when the validators read it alike.</p>
-      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+      <div class="prim-addr"><span class="prim-v">-</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
     </div>
   </div>
   <div class="prim-foot">
-    <span class="prim-note" id="primNote">Read live from the Router on <span data-net-name>Bradbury</span>. Paste an API key above to show the addresses.</span>
+    <span class="prim-note" id="primNote">Read from the Router on <span data-net-name>Bradbury</span> at FINALIZED, at most ten minutes ago.</span>
     <span class="fill"></span>
     <span class="prim-built">Built on Lacre</span>
   </div>
@@ -359,19 +431,19 @@
   <div class="why-cards">
     <section class="module why-card">
       <div class="why-top"><span class="why-no">01</span><span class="lt lt-9 final"></span></div>
-      <span class="fill"></span>
+      <span class="fill glyph-slot"><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><rect x="2" y="4" width="22" height="14" rx="4"/><line x1="6" y1="11" x2="14" y2="11"/><circle class="on" cx="19" cy="9.5" r="2.2"/><rect x="48" y="4" width="22" height="14" rx="4"/><line x1="52" y1="11" x2="60" y2="11"/><circle class="on" cx="65" cy="9.5" r="2.2"/><rect x="25" y="28" width="22" height="14" rx="4"/><line x1="29" y1="35" x2="37" y2="35"/><circle class="on" cx="42" cy="33.5" r="2.2"/><circle cx="36" cy="16" r="3.5"/><line x1="24" y1="11" x2="32" y2="15"/><line x1="48" y1="11" x2="40" y2="15"/><line x1="36" y1="20" x2="36" y2="28"/></svg></span>
       <h3 class="why-t">Keys obtained<br>by consensus</h3>
       <p>Validators each fetch the sender's signing key and must agree on it, so no single resolver decides.</p>
     </section>
     <section class="module why-card">
       <div class="why-top"><span class="why-no">02</span><span class="lt lt-9 final"></span></div>
-      <span class="fill"></span>
+      <span class="fill glyph-slot"><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><rect x="8" y="15" width="22" height="14" rx="4"/><line x1="12" y1="22" x2="20" y2="22"/><circle class="on" cx="25" cy="20.5" r="2.2"/><line x1="50" y1="22" x2="64" y2="22"/><line x1="57" y1="15" x2="57" y2="29"/><line x1="34" y1="22" x2="44" y2="22" stroke-dasharray="2 3"/></svg></span>
       <h3 class="why-t">New senders<br>as data</h3>
       <p>An unknown domain needs no integration: its key is fetched and recorded the first time it signs.</p>
     </section>
     <section class="module why-card">
       <div class="why-top"><span class="why-no">03</span><span class="lt lt-9 final"></span></div>
-      <span class="fill"></span>
+      <span class="fill glyph-slot"><svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><rect x="4" y="15" width="22" height="14" rx="4"/><line x1="8" y1="22" x2="16" y2="22"/><circle class="on" cx="21" cy="20.5" r="2.2"/><rect x="25" y="15" width="22" height="14" rx="4"/><line x1="29" y1="22" x2="37" y2="22"/><circle class="on" cx="42" cy="20.5" r="2.2"/><rect x="46" y="15" width="22" height="14" rx="4"/><line x1="50" y1="22" x2="58" y2="22"/><circle class="on" cx="63" cy="20.5" r="2.2"/><line x1="8" y1="38" x2="64" y2="38"/></svg></span>
       <h3 class="why-t">Interpretation<br>by consensus</h3>
       <p>What the email says is accepted only when independent validators read it the same way.</p>
     </section>
@@ -429,10 +501,10 @@
               <button class="tool" type="button" title="Copy" data-copy="lacre_record"><span class="tool-n">lacre_record</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
               <button class="tool" type="button" title="Copy" data-copy="lacre_extraction"><span class="tool-n">lacre_extraction</span><span class="tool-a">lane, id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
               <button class="tool" type="button" title="Copy" data-copy="lacre_sender"><span class="tool-n">lacre_sender</span><span class="tool-a">domain, selector</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
-              <button class="tool" type="button" title="Copy" data-copy="lacre_health"><span class="tool-n">lacre_health</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
-              <button class="tool" type="button" title="Copy" data-copy="lacre_account"><span class="tool-n">lacre_account</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
-              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_create"><span class="tool-n">lacre_mailbox_create</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
-              <button class="tool" type="button" title="Copy" data-copy="lacre_mailboxes"><span class="tool-n">lacre_mailboxes</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_health"><span class="tool-n">lacre_health</span><span class="tool-a">-</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_account"><span class="tool-n">lacre_account</span><span class="tool-a">-</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_create"><span class="tool-n">lacre_mailbox_create</span><span class="tool-a">-</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailboxes"><span class="tool-n">lacre_mailboxes</span><span class="tool-a">-</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
               <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox"><span class="tool-n">lacre_mailbox</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
               <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_jobs"><span class="tool-n">lacre_mailbox_jobs</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
               <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_disable"><span class="tool-n">lacre_mailbox_disable</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
@@ -447,27 +519,45 @@
   <h2 class="eyebrow">ACCESS</h2>
   <div class="ways">
     <div class="way card">
-      <div class="way-top"><span class="lt off" id="walletLt"></span><span class="way-tag">COMING NEXT</span></div>
-      <h3 class="way-t">Have GEN?</h3>
-      <p class="way-d">Connect wallet, no account needed.</p>
+      <div class="way-top"><span class="way-no">01</span><span class="way-tag">NO ACCOUNT</span></div>
+      <svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><polyline points="22 10 10 22 22 34"/><polyline points="50 10 62 22 50 34"/><line x1="41" y1="8" x2="31" y2="36"/></svg>
+      <h3 class="way-t">Integrate</h3>
+      <p class="way-d">Your contract reads records by id with <span class="mono">require_attestation</span>. Nothing to sign up for.</p>
       <span class="fill"></span>
-      <button class="btn-main" id="walletBtn" type="button" disabled>CONNECT WALLET</button>
+      <a class="btn-main" href="#integrate">SEE THE SNIPPET</a>
     </div>
-    <div class="way way-form">
-      <h3 class="way-t">Prefer the gateway?</h3>
-      <p class="way-d">Request access.</p>
+    <div class="way way-form card">
+      <div class="way-top"><span class="way-no">02</span><span class="way-tag">GATEWAY &middot; MAILBOX &middot; MCP</span></div>
+      <svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><circle cx="24" cy="22" r="10"/><circle class="on" cx="24" cy="22" r="2.5"/><line x1="34" y1="22" x2="62" y2="22"/><line x1="54" y1="22" x2="54" y2="30"/><line x1="46" y1="22" x2="46" y2="28"/></svg>
+      <h3 class="way-t">Get credits</h3>
+      <p class="way-d">Request an API key. The gateway pays the fee and the gas, and you pay it in credits.</p>
       <form class="acc-form" id="accForm" novalidate>
-    <div class="acc-two">
-      <label class="field"><span class="label">NAME</span><input class="acc-in" id="accName" name="name" maxlength="100" autocomplete="name" required></label>
-      <label class="field"><span class="label">EMAIL</span><input class="acc-in mono" id="accEmail" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+        <div class="acc-two">
+          <label class="field"><span class="label">NAME</span><input class="acc-in" id="accName" name="name" maxlength="100" autocomplete="name" required></label>
+          <label class="field"><span class="label">EMAIL</span><input class="acc-in mono" id="accEmail" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+        </div>
+        <label class="field"><span class="label">WHAT YOU WILL ATTEST</span><textarea class="acc-in" id="accWhat" name="what" maxlength="2000" placeholder="Shipping notices, invoices&hellip;"></textarea></label>
+        <div class="acc-foot">
+          <button class="btn-main" id="accSend" type="submit" disabled>REQUEST ACCESS</button>
+          <span class="acc-ok" id="accOk" role="status" hidden><span class="lt final"></span>RECEIVED</span>
+          <span class="msg err" id="accMsg" role="alert"></span>
+        </div>
+      </form>
     </div>
-    <label class="field"><span class="label">WHAT YOU WILL ATTEST</span><textarea class="acc-in" id="accWhat" name="what" maxlength="2000" placeholder="Shipping notices, invoices&hellip;"></textarea></label>
-    <div class="acc-foot">
-      <button class="btn-main" id="accSend" type="submit" disabled>REQUEST ACCESS</button>
-      <span class="acc-ok" id="accOk" role="status" hidden><span class="lt final"></span>RECEIVED</span>
-      <span class="msg err" id="accMsg" role="alert"></span>
-    </div>
-  </form>
+    <div class="way card" id="walletCard">
+      <div class="way-top"><span class="lt off" id="walletLt"></span><span class="way-tag" id="walletTag">BRADBURY</span></div>
+      <svg class="glyph" viewBox="0 0 72 44" aria-hidden="true"><rect x="10" y="10" width="52" height="28" rx="5"/><path d="M14 10l30-6 4 6"/><rect x="44" y="19" width="18" height="10" rx="3"/><circle class="on" cx="50" cy="24" r="2"/></svg>
+      <h3 class="way-t">Use your wallet</h3>
+      <p class="way-d">Have GEN? Sign <span class="mono">attest_inline</span> yourself and pay the fee. No account.</p>
+      <div class="wallet-info" id="walletInfo" hidden>
+        <div class="kv"><span>Address</span><span class="fill"></span><button class="v wallet-addr" id="walletAddr" type="button" title="Copy"></button></div>
+        <div class="kv"><span>Balance</span><span class="fill"></span><span class="v" id="walletBal">-</span><span class="wallet-u">GEN</span></div>
+        <button class="linkbtn wallet-off" id="walletOff" type="button">Disconnect</button>
+      </div>
+      <span class="fill"></span>
+      <p class="msg" id="walletMsg" role="status"></p>
+      <button class="btn-main" id="walletBtn" type="button">CONNECT WALLET</button>
+      <a class="way-link" href="https://testnet-faucet.genlayer.foundation" target="_blank" rel="noopener noreferrer">Bradbury GEN from the faucet</a>
     </div>
   </div>
 </section>

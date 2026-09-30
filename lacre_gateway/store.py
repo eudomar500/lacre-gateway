@@ -442,6 +442,17 @@ class Store:
                         (mailbox_id, limit, offset))
         return [self.job(r["id"]) for r in ids]
 
+    def account_jobs(self, account_id, statuses, limit, offset):
+        """A page of account_id's jobs, newest first: id, status, stage and
+        the times only. statuses narrows it to those statuses; None is all."""
+        where, args = "account_id = ?", [account_id]
+        if statuses:
+            where += " AND status IN (%s)" % (", ".join("?" * len(statuses)),)
+            args.extend(statuses)
+        return self._all("SELECT id, status, stage, created_at, updated_at, finished_at "
+                         "FROM jobs WHERE %s ORDER BY created_at DESC, rowid DESC "
+                         "LIMIT ? OFFSET ?" % (where,), (*args, limit, offset))
+
     # ---- mailboxes -----------------------------------------------------------
 
     def create_mailbox(self, account_id, extract_mode):

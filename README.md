@@ -149,6 +149,8 @@ An unknown key is 401, the key of a disabled account 403. Times are UTC ISO
 |-----------------|--------|
 | `POST /attest` | multipart form, field `eml`, optional field `extract` (`none`, `patterns`, `llm`, `auto`; default `LACRE_EXTRACT_DEFAULT`, `auto`). `202 {"job_id", "status": "pending", "job", "extract"}`. 422 for a message that cannot be attested or an unknown `extract`, 413 over `LACRE_MAX_EML_BYTES`, 402 when the balance cannot cover the hold (see [Pricing](#pricing)). |
 | `GET /jobs/{id}` | only the account that created the job (by upload, or through one of its mailboxes) sees it; any other key, bootstrap keys included, gets 404, as for a job that does not exist. `status` (`pending`, `attesting`, `extracting`, `finalized`, `refused`, `failed`), `stage`, timestamps, `consensus_tx` and `explorer` once sent (every attempt in `consensus_txs`), `tx_status`, `sender_confirm_after` while the sender is in verification, `record_id`, `verifier` and `valid_and_aligned` when written (a record means the check ran, not that it passed), `refusal_reason` when refused, `error` when failed, `body_hash_matches`, `via` (`api` for an upload, `inbound` for mail to a mailbox), `mailbox` (its id, or `null`), `cost` (`{"held", "charged", "released"}`, see [Pricing](#pricing)), and `extraction` (below; `null` for `extract=none`). |
+| `GET /jobs` | `{"jobs": [...], "status", "limit", "offset", "next"}`: the caller key's jobs, newest first, each `{"id", "status", "stage", "created_at", "updated_at", "finished_at"}` only; `GET /jobs/{id}` has the rest. `?status=` narrows it to `open` (pending, attesting, extracting), `finalized`, `refused` or `failed`; `limit` 1 to 100 (default 20), `offset` from 0; `next` is the path of the next page, or `null`. 422 for another status. |
+| `GET /primitives` | no key. `{"network", "read_at", "layers", "addresses"}`: the contract the Router names for each layer (`router`, `keycache`, `verifier`, `extractor_patterns`, `extractor_llm`), read at `LATEST_FINAL`, as `/health` reports them. One reading serves every caller for ten minutes (`Cache-Control: public, max-age` says how much is left); a reading that found no Router is kept 30 seconds. |
 | `POST /mailboxes` | optional form field `extract` (as for `/attest`; default `LACRE_EXTRACT_DEFAULT`). `201` with the mailbox: `id` (12 base32 characters), `address` (`lacre-<id>@<LACRE_MAIL_DOMAIN>`), `extract`, `enabled`, `received`, `dropped`, `last_received_at`, `created_at`, `disabled_at`, `jobs`. |
 | `GET /mailboxes` | `{"mailboxes": [...]}`, the caller key's mailboxes, oldest first. |
 | `GET /mailboxes/{id}` | one mailbox. 404 for an id that does not exist or belongs to another key; the two are not told apart. |
@@ -532,27 +534,39 @@ every 15 seconds, which keeps the tunnel from closing it as idle.
 
 The gateway serves a web app from `web/`: plain HTML, one stylesheet
 (`app.css`), one script (`app.js`), no framework, no build step and no
-runtime dependency; `state.js` holds what survives a reload. Fonts (Jost, JetBrains Mono) are self-hosted in
-`web/fonts` with their SIL Open Font License files; icons are inline SVG.
-The pages load nothing from another origin, and a Content-Security-Policy
-header holds them to that.
+runtime dependency; `state.js` holds what survives a reload, `dkim.js`
+cuts the headers blob in the browser and `wallet.js` is the wallet path.
+Fonts (Jost, JetBrains Mono) are self-hosted in `web/fonts` with their SIL
+Open Font License files; icons and glyphs are inline SVG. genlayer-js
+1.2.0, the SDK major that speaks to Bradbury, is self-hosted as one file,
+`web/genlayer-js-1.2.0.min.js` (with viem 2.56.3, both MIT; the
+license texts are next to it), and loaded only when a wallet is used. The
+pages load nothing from another origin, and a Content-Security-Policy
+header holds them to that; the one other origin they talk to is the
+Bradbury RPC, for the wallet path.
 
 | path | what it is |
 |------|------------|
 | `/` | one scrolling page: the main screen (readouts, the disk, attest and the plugin rail), then the sections `#how`, `#primitives`, `#why`, `#mcp` and `#access` |
 | `/docs.html` | the endpoints and MCP tools, and the rule that only a finalized record is proof |
-| `/how.html`, `/why.html`, `/mcp.html`, `/access.html` | 301 to their section of `/` |
+| `/how.html`, `/why.html`, `/mcp.html`, `/access.html` | 301 to their section of `/`, for GET and HEAD |
 | `/favicon.svg` | the disk, as the page icon |
 | `/static/*` | the stylesheet, the scripts and the fonts |
 
-None of these takes an API key. What is live on the main screen, against
-the API of the same origin with the visitor's key:
+None of these takes an API key. The page presents Lacre as a primitive
+first: under the disk, when idle, "Integrate: require_attestation in your
+contract", and the Primitives section opens with the Integrate block, the
+minimal consumer cut from `integrations/consumer_example.py` in the Lacre
+repository between its `# integrate:begin` and `# integrate:end` markers
+(`tests/test_landing.py` holds the page to the file). The contract layers
+and the Primitives addresses come from `GET /primitives`, with no key. What
+is live on the main screen, against the API of the same origin with the
+visitor's key:
 
 - the account (`GET /account`: balance, prices, job counts), read as
   soon as the key is accepted and again on every change of the job
-  followed, and the contract layers (`GET /health`, `layers`); the
-  Primitives section shows each contract's address from `addresses`, so
-  it follows the Router;
+  followed, and its jobs (`GET /jobs`), newest first in the left panel:
+  a click follows one, and a click on a count narrows the list to it;
 - attest: a .eml by drop or file picker, or pasted source, with the
   extraction mode, as `POST /attest`; the job is then read from
   `GET /jobs/{id}` every 20 seconds and drawn on the disk, stage by
@@ -570,6 +584,34 @@ the API of the same origin with the visitor's key:
   with the key masked on screen and whole in what is copied, and the
   mailboxes of the account (`GET /mailboxes`, `POST /mailboxes`).
 
+**With a wallet, no account.** "Use your wallet" connects an injected
+wallet (EIP-1193) and puts it on Bradbury, chain 4221: switch, and add the
+chain when the wallet does not know it, including Rabby's `-32603
+Unrecognized chain ID` answer. The card shows the address, its GEN balance
+on Bradbury and Disconnect. With a wallet connected and no key, the input
+card reads "Paying with wallet 0x..." and ATTEST, with no request to the
+API: `dkim.js` cuts the headers blob from the .eml as `tools/headers_blob.py`
+does (the signature the gateway would pick, the fields its `h=` covers, in
+the message's order, CRLF), `wallet.js` resolves the Verifier and the
+KeyCache on the Router at `LATEST_FINAL`, reads `fee()` at
+`LATEST_NONFINAL`, refuses before sending when the key is not `active`,
+reads `records_of(address)` and `last_refusal(address)`, and has the wallet
+sign `attest_inline(headers_blob, domain, selector)` with the fee as value.
+The transaction is then followed on the RPC through its stored consensus
+state to `FINALIZED`, and the record is the new id in
+`records_of(address)`, read with `get(id)` at `LATEST_FINAL` and kept only
+when its requester is the address (docs/direct-use.md in the Lacre
+repository). No job is created. Extraction is not offered on this path.
+The transaction in flight is kept in localStorage by `state.js` from the
+moment the wallet returns its hash, so a reload, or a visit later, follows
+it from where it was; NEW forgets it.
+
+A cable is drawn from the wallet chip to the disk's entry port on connect,
+pulses toward the disk while the transaction is in flight and back toward
+the card when it is recorded, and retracts on disconnect; a gray one joins
+the plugin to the disk while a job sent through the API or a mailbox runs.
+Stroke-dashoffset and transforms only, and still under reduced motion.
+
 **What survives a reload.** The job followed is in the URL (`?job=`)
 and in sessionStorage, and is picked up again on load with no click. The
 key is kept in sessionStorage while "Remember for this session" is on (the
@@ -577,9 +619,10 @@ default), so it lasts until the tab closes; with the switch off it is kept
 in memory only and a reload asks for it again. It is never put in
 localStorage, a cookie or the URL, and is sent in `X-API-Key` to this
 origin and nowhere else. localStorage holds only durable choices: the
-switch itself, and the address of a wallet once connected, which is
+switch itself, the address of a wallet once connected, which is
 checked again on load with `eth_accounts` (no prompt) and forgotten if the
-wallet no longer grants it.
+wallet no longer grants it, and the wallet's transaction in flight (its
+hashes and what was read before sending, all public chain data).
 
 **Access requests.** `POST /access-request` takes JSON
 `{"name", "email", "what"}` with no key: name 1 to 100 characters, a
@@ -590,8 +633,7 @@ tunnel) or 100 an hour from all together. The limit is kept in memory; the
 address is never stored. Requests are listed with
 `GET /admin/access-requests` (see [The admin API](#the-admin-api)).
 
-**Coming soon**, shown disabled on the access page: self-service sign-up
-and top-ups. Until then an operator creates the account and its key.
+**Coming soon**: self-service sign-up and top-ups. Until then an operator creates the account and its key.
 
 **The design source** is a self-contained design bundle kept outside this
 repository, with the product design files; nothing of it (its runtime,
@@ -656,9 +698,9 @@ systemctl daemon-reload && systemctl enable --now lacre-gateway
 
 The service listens on 127.0.0.1:8080. `deploy/cloudflared.yml.example` is
 the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
-`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths, `/mcp`, and the web
-app (`/`, the five pages, `/static/*`, `/access-request`) only, not
-`/admin/*`. Check with
+`/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths (`/jobs` among
+them), `/mcp`, and the web app (`/`, the five pages, `/static/*`,
+`/access-request`, `/primitives`) only, not `/admin/*`. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
 
 Mailboxes need `LACRE_INBOUND_SECRET` in `gateway.env` and the Email
