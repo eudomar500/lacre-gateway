@@ -38,6 +38,12 @@
     <button class="nav-wallet" type="button">CONNECT WALLET</button>
     <a href="#access">Access</a>
   </div>
+  <div class="wallet-pop card" id="walletPop" role="dialog" aria-label="Wallet" hidden>
+    <div class="wallet-pop-addr mono" id="walletPopAddr"></div>
+    <div class="kv" id="walletPopBal"><span>Balance</span><span class="fill"></span><span class="v" id="walletPopGen">-</span><span class="wallet-u">GEN</span></div>
+    <div class="kv" id="walletPopChain" hidden><span>Not on Bradbury</span></div>
+    <button class="linkbtn wallet-off" id="walletPopOff" type="button">Disconnect</button>
+  </div>
 </header>
 
 <main class="main">
@@ -566,6 +572,8 @@ def attested(router, record_id, domain, min_key_bits):
 </div>
 
 <div class="vswarm" id="vswarm" aria-hidden="true"></div>
+
+<footer class="site-foot">Built by <a href="https://in-sidr.xyz" target="_blank" rel="noopener">Insidr Labs</a> on <a href="https://genlayer.com" target="_blank" rel="noopener">GenLayer</a></footer>
 
 </body>
 </html>

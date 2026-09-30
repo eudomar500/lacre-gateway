@@ -125,6 +125,11 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .nav-drop a { font-size: 12px; letter-spacing: .24em; text-transform: uppercase; text-decoration: none; color: var(--ink); padding: 14px 0; border-bottom: 1px solid #e6e8eb; }
 .nav-drop a:last-child { border-bottom: none; }
 .nav-drop .nav-wallet { font-size: 12px; color: var(--ink); padding: 14px 0; border-bottom: 1px solid #e6e8eb; }
+/* Fixed so it sits over the stage and the swarm; app.js places it under the item. */
+.wallet-pop { position: fixed; z-index: 40; width: 260px; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.wallet-pop-addr { font-size: 11px; line-height: 1.5; word-break: break-all; color: var(--ink); }
+/* In the drawer the same rows sit inline under the item, not over the menu. */
+.nav-drop .wallet-pop { position: static; width: auto; padding: 4px 0 14px; border-radius: 0; background: none; box-shadow: none; border-bottom: 1px solid #e6e8eb; }
 
 /* ---- shared controls ------------------------------------------------------------- */
 
@@ -502,6 +507,12 @@ textarea.acc-in { height: 88px; resize: none; padding: 10px 12px; line-height: 1
 .acc-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .acc-foot .btn-main { padding: 0 28px; font-size: 11.5px; letter-spacing: .4em; }
 .acc-ok { display: flex; align-items: center; gap: 10px; font-size: 10.5px; letter-spacing: .3em; }
+
+/* ---- footer -------------------------------------------------------------------------------------- */
+
+.site-foot { padding: 48px 20px; text-align: center; border-top: 1px solid var(--line); font-size: 10px; letter-spacing: .3em; color: var(--muted-2); }
+.site-foot a { color: inherit; text-decoration: none; }
+.site-foot a:hover { color: var(--ink); }
 
 /* ---- below 1024px: the mobile layout (1b) ------------------------------------------------------ */
 

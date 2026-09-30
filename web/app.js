@@ -1715,6 +1715,34 @@
 
     // ---- the wallet card ------------------------------------------------------------------------
 
+    // The nav item it was opened from, or null. One element serves both navs.
+    var pop = $('walletPop');
+    var popItem = null;
+
+    function openPop(item) {
+      popItem = item;
+      // Right after the item, so Tab goes from the item into it.
+      item.after(pop);
+      if (item.closest('.nav-drop')) {
+        pop.style.top = pop.style.right = '';
+      } else {
+        var r = item.getBoundingClientRect();
+        pop.style.top = (r.bottom + 10) + 'px';
+        pop.style.right = (document.documentElement.clientWidth - r.right) + 'px';
+      }
+      pop.hidden = false;
+      item.setAttribute('aria-expanded', 'true');
+    }
+
+    function closePop(refocus) {
+      if (!popItem) { return; }
+      var item = popItem;
+      popItem = null;
+      pop.hidden = true;
+      item.setAttribute('aria-expanded', 'false');
+      if (refocus) { item.focus(); }
+    }
+
     function renderWallet() {
       var address = state.walletAddr;
       var present = !!wallet.provider();
@@ -1726,6 +1754,12 @@
         $('walletAddr').title = address;
         $('walletAddr').setAttribute('data-copy', address);
         $('walletBal').textContent = state.walletBal || NONE;
+        $('walletPopAddr').textContent = address;
+        $('walletPopGen').textContent = state.walletBal || NONE;
+        show($('walletPopBal'), state.walletChain);
+        show($('walletPopChain'), !state.walletChain);
+      } else {
+        closePop(false);
       }
       var btn = $('walletBtn');
       btn.disabled = state.walletBusy || (!address && !present);
@@ -1741,8 +1775,10 @@
         if (!address) {
           item.textContent = state.walletBusy ? 'CONNECTING' : 'CONNECT WALLET';
           item.removeAttribute('title');
+          item.removeAttribute('aria-expanded');
           return;
         }
+        item.setAttribute('aria-expanded', String(item === popItem));
         var lt = document.createElement('span');
         lt.className = 'lt lt-7 ' + (state.walletChain ? 'final' : 'provisional');
         var text = document.createElement('span');
@@ -1799,20 +1835,42 @@
       render();
       $('drop').focus();
     });
-    // Without a wallet to connect, or once connected, the card has the rest:
-    // why there is none, or the balance and Disconnect.
+    // Connected, the item opens the wallet under it. Without a wallet to
+    // connect, the card says why there is none.
     all('.nav-wallet').forEach(function (item) {
       item.addEventListener('click', function () {
-        if (!state.walletAddr && wallet.provider()) { connect(); return; }
+        if (state.walletAddr) {
+          var again = popItem === item;
+          closePop(false);
+          if (!again) { openPop(item); }
+          return;
+        }
+        if (wallet.provider()) { connect(); return; }
         var nav = document.querySelector('.nav');
         nav.classList.remove('menu-open');
         nav.querySelector('.nav-menu').setAttribute('aria-expanded', 'false');
-        $(state.walletAddr ? 'access' : 'walletCard').scrollIntoView();
+        $('walletCard').scrollIntoView();
       });
     });
-    $('walletOff').addEventListener('click', function () {
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { closePop(true); }
+    });
+    // The item's own click runs first and has already toggled the popover.
+    document.addEventListener('click', function (event) {
+      if (popItem && !pop.contains(event.target) && !popItem.contains(event.target)) { closePop(false); }
+    });
+    // A floating popover is placed once; the inline one moves with the drawer.
+    window.addEventListener('resize', function () {
+      if (popItem && !popItem.closest('.nav-drop')) { closePop(false); }
+    });
+    function disconnect() {
       state.walletMsg = '';
       store.disconnectWallet();
+    }
+    $('walletOff').addEventListener('click', disconnect);
+    $('walletPopOff').addEventListener('click', function () {
+      closePop(true);
+      disconnect();
     });
     $('useKey').addEventListener('click', function () {
       state.keyOpen = !state.keyOpen;

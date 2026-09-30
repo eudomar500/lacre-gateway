@@ -237,6 +237,31 @@ def test_access_stays_the_only_pill():
     assert pills == ["Access"]
 
 
+def test_the_wallet_popover_is_in_the_page_and_hidden():
+    page = (WEB_DIR / "index.html").read_text(encoding="ascii")
+    tag = re.search(r'<div [^>]*id="walletPop"[^>]*>', page)
+    assert tag, "no wallet popover"
+    assert 'role="dialog"' in tag.group(0) and 'aria-label="' in tag.group(0)
+    assert re.search(r"\shidden[\s>]", tag.group(0))
+    for part in ('id="walletPopAddr"', 'id="walletPopGen"', "Not on Bradbury",
+                 'id="walletPopOff"'):
+        assert part in page, part
+
+
+# ---- the footer --------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["index.html", "docs.html"])
+def test_the_page_ends_with_the_footer(name):
+    page = (WEB_DIR / name).read_text(encoding="ascii")
+    assert page.rstrip().endswith("</body>\n</html>")
+    body = page[:page.rindex("</body>")].rstrip()
+    assert body.endswith("</footer>")
+    foot = body[body.rindex("<footer"):]
+    assert re.findall(r'href="([^"]*)"', foot) == ["https://in-sidr.xyz", "https://genlayer.com"]
+    assert foot.count('target="_blank" rel="noopener"') == 2
+    assert re.sub(r"<[^>]+>", "", foot) == "Built by Insidr Labs on GenLayer"
+
+
 # ---- the Integrate snippet -----------------------------------------------------------------
 
 def snippet_in_file():

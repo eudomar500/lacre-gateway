@@ -21,7 +21,8 @@ AUTH = {"X-API-Key": API_KEY}
 # testnet faucet and the public Lacre repository the Integrate block links
 # to. Everything the pages load is on /static.
 ALLOWED_HOSTS = {"lacre.in-sidr.xyz", "explorer-bradbury.genlayer.com",
-                 "rpc-bradbury.genlayer.com", "testnet-faucet.genlayer.foundation", "github.com"}
+                 "rpc-bradbury.genlayer.com", "testnet-faucet.genlayer.foundation", "github.com",
+                 "in-sidr.xyz", "genlayer.com"}
 # Kept verbatim like the font licenses: the genlayer-js build names the
 # hosts of every chain it knows, and loads none of them but the RPC.
 VERBATIM = {"genlayer-js-1.2.0.min.js", "genlayer-js-1.2.0.LICENSE.txt"}
