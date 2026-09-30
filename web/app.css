@@ -100,7 +100,7 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 
 /* ---- nav ----------------------------------------------------------------------- */
 
-.nav { position: relative; z-index: 20; height: 64px; flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; background: var(--nav); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 #ffffff; }
+.nav { position: sticky; top: 0; z-index: 20; height: 64px; flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; background: var(--nav); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 #ffffff; }
 .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
 .logo:hover { color: var(--ink); }
 .logo-knob { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffffff, #e4e7ea); box-shadow: 0 1px 2px rgba(30, 34, 40, .25), inset 0 0 0 1px #d4d8dd; display: flex; align-items: center; justify-content: center; }
@@ -148,8 +148,9 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 
 /* ---- main screen: frame ---------------------------------------------------------------- */
 
-body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-.main { flex: 1; display: flex; min-height: 0; position: relative; }
+/* The disk screen fills the first view; the sections scroll under it. */
+body.app { min-height: 100vh; }
+.main { height: calc(100vh - 64px); min-height: 600px; display: flex; position: relative; }
 
 .side { width: 232px; flex: none; transition: width .8s var(--ease); background: var(--panel); border-right: 1px solid var(--line); box-shadow: 1px 0 0 #ffffff; position: relative; overflow: hidden; }
 .side.collapsed { width: 52px; }
@@ -208,6 +209,21 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 .card-head { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; box-sizing: border-box; }
 .card-sum { flex: 1; min-width: 0; font-family: var(--mono); font-size: 10.5px; color: var(--muted-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.following { display: flex; align-items: center; gap: 7px; flex: none; font-size: 9.5px; letter-spacing: .26em; color: var(--ink-3); }
+.following-id { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0; color: var(--ink); }
+.card-follow { min-height: 36px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 16px 12px; box-sizing: border-box; }
+.confirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.confirm-t { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.linkbtn { padding: 0; border: none; background: none; color: var(--ink-3); font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ring); cursor: pointer; }
+.linkbtn:hover { color: var(--blue); text-decoration-color: currentColor; }
+.resume-link { align-self: flex-start; }
+.switch { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px; color: var(--ink-3); }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; width: 30px; height: 18px; flex: none; border-radius: 9px; background: var(--well); box-shadow: inset 0 0 0 1px var(--ring); transition: background .3s; }
+.switch-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(30, 34, 40, .25); transition: transform .3s var(--ease); }
+.switch input:checked + .switch-track { background: var(--ink); box-shadow: none; }
+.switch input:checked + .switch-track::after { transform: translateX(12px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--blue); outline-offset: 2px; }
 .tabs { display: flex; gap: 4px; padding: 3px; border-radius: 15px; background: var(--well); box-shadow: inset 0 1px 2px rgba(30, 34, 40, .08); align-self: flex-start; }
 .tab { height: 24px; padding: 0 14px; border: none; border-radius: 12px; background: transparent; color: var(--ink); font-size: 10px; letter-spacing: .28em; cursor: pointer; }
 .tab[aria-selected="true"] { background: #ffffff; box-shadow: 0 1px 2px rgba(30, 34, 40, .14), inset 0 0 0 1px #dcdfe3; }
@@ -235,6 +251,9 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 .orow { display: flex; align-items: center; gap: 8px; min-height: 30px; }
 .orow-k { width: 104px; flex: none; font-size: 10px; letter-spacing: .24em; color: var(--muted-2); text-transform: uppercase; }
 .orow-v { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The transaction the current stage waits on. */
+.orow.tx { margin: 0 -8px; padding: 0 8px; border-radius: 8px; transition: background .4s, box-shadow .4s; }
+.orow.tx.cur { background: rgba(47, 123, 245, .06); box-shadow: inset 2px 0 0 var(--blue); }
 .checks { display: flex; gap: 8px; }
 .check { flex: 1; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; background: var(--chip); box-shadow: inset 0 0 0 1px var(--line-2); font-size: 10px; letter-spacing: .28em; }
 .ex { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--line-2); }
@@ -244,6 +263,8 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 /* ---- plugin rail --------------------------------------------------------------------------- */
 
 .plug-slot { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 5; }
+/* Open, the plugin sits under the input card instead of over it. */
+.plug-slot.below { transform: none; }
 .plug { --plug-h: 712px; position: relative; margin-left: auto; width: 68px; height: 300px; border-radius: 34px; transition: width .9s var(--ease), height .9s var(--ease), border-radius .9s var(--ease); background: var(--module); box-shadow: 0 18px 40px rgba(30, 34, 40, .14), 0 2px 4px rgba(30, 34, 40, .10), inset 0 1px 0 #ffffff, inset 0 0 0 1px rgba(36, 39, 44, .09); overflow: hidden; }
 .plug.open { width: 404px; height: var(--plug-h); border-radius: 20px; }
 .plug-closed { position: absolute; inset: 0; width: 100%; padding: 0; border: none; background: transparent; color: inherit; font: inherit; opacity: 1; transition: opacity .35s; cursor: pointer; }
@@ -298,11 +319,22 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 .tool-a { flex: 1; font-family: var(--mono); font-size: 10.5px; color: var(--muted-3); }
 .tool .ic { font-size: 13px; }
 
-/* The MCP page shows the plugin as an open panel that never folds. */
+/* The MCP section shows the plugin as an open panel that never folds. */
 .plug.panel { width: 100%; height: auto; border-radius: 22px; }
 .plug.panel .plug-closed { display: none; }
 .plug.panel .plug-inner { position: relative; width: 100%; max-height: none; overflow: visible; opacity: 1; pointer-events: auto; transition: none; }
 .plug.panel .conn { transform: none; transition: none; }
+
+/* ---- validators -------------------------------------------------------------------------------- */
+
+/* Placed by app.js with transforms only; the field is the disk's frame,
+   the swarm the viewport's. */
+.vfield { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.vswarm { position: fixed; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; }
+.vpiece { position: absolute; left: -11px; top: -7px; width: 22px; height: 14px; border-radius: 4px; background: linear-gradient(180deg, #ffffff, #e9ebee); box-shadow: 0 4px 10px rgba(30, 34, 40, .18), inset 0 0 0 1px rgba(36, 39, 44, .12), inset 0 1px 0 #ffffff; will-change: transform, opacity; opacity: 0; }
+.vpiece::before { content: ''; position: absolute; left: 4px; right: 9px; top: 6px; height: 1px; background: rgba(36, 39, 44, .16); }
+.vpiece::after { content: ''; position: absolute; right: 3px; top: 4px; width: 5px; height: 5px; border-radius: 50%; background: #f2f6ff; box-shadow: 0 0 0 1px rgba(36, 39, 44, .16), 0 0 5px 1px rgba(140, 175, 235, .8); transition: background .5s, box-shadow .5s; }
+.vpiece.ok::after { background: var(--green); box-shadow: 0 0 0 1px rgba(36, 39, 44, .12), 0 0 7px 2px rgba(34, 176, 107, .6); }
 
 /* ---- pages ------------------------------------------------------------------------------------ */
 
@@ -358,7 +390,32 @@ body.app { height: 100vh; display: flex; flex-direction: column; overflow: hidde
 .sample pre { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 11.5px; line-height: 1.65; color: var(--ink-2); white-space: pre; overflow: auto; }
 .sample .code-copy { top: 4px; right: 6px; width: 26px; height: 26px; border-radius: 13px; }
 
-.mcp-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 56px 0; }
+.mcp-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 96px 0; }
+
+/* ---- the landing under the disk screen ---------------------------------------------------------- */
+
+html { scroll-behavior: smooth; }
+.sect { scroll-margin-top: 64px; border-top: 1px solid var(--line); box-shadow: inset 0 1px 0 #ffffff; }
+.prims { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; max-width: 1248px; }
+.prim { min-height: 232px; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
+.prim-top { display: flex; align-items: center; justify-content: space-between; }
+.prim-no { font-family: var(--mono); font-size: 10.5px; color: var(--muted-3); }
+.prim-n { margin: 8px 0 0; font-size: 12px; font-weight: 400; letter-spacing: .24em; text-transform: uppercase; }
+.prim-d { flex: 1; margin: 0; font-size: 13.5px; line-height: 1.55; color: #5a5f67; font-weight: 300; text-wrap: pretty; }
+.prim-addr { display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 4px 0 10px; border-radius: 9px; background: #ffffff; box-shadow: inset 0 0 0 1px var(--line); }
+.prim-v { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prim-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; max-width: 1248px; }
+.prim-note { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.prim-built { font-size: 11px; letter-spacing: .34em; text-transform: uppercase; color: var(--ink-3); }
+.ways { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 560px); gap: 24px; align-items: stretch; }
+.way { display: flex; flex-direction: column; gap: 10px; }
+.way.card { padding: 24px; border-radius: 20px; }
+.way-top { display: flex; align-items: center; justify-content: space-between; }
+.way-tag { font-size: 9.5px; letter-spacing: .3em; color: var(--muted); }
+.way-t { margin: 6px 0 0; font-size: 22px; font-weight: 400; letter-spacing: .01em; }
+.way-d { margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: #5a5f67; font-weight: 300; }
+.way .btn-main { padding: 0 24px; font-size: 11px; letter-spacing: .34em; }
+.way-form .acc-form { width: auto; }
 .mcp-col { width: 880px; max-width: 100%; }
 
 .acc-form { width: 560px; max-width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; display: flex; flex-direction: column; gap: 14px; background: var(--card); box-shadow: 0 18px 40px rgba(30, 34, 40, .10), inset 0 0 0 1px rgba(36, 39, 44, .08), inset 0 1px 0 #ffffff; }
@@ -370,11 +427,6 @@ textarea.acc-in { height: 88px; resize: none; padding: 10px 12px; line-height: 1
 .acc-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .acc-foot .btn-main { padding: 0 28px; font-size: 11.5px; letter-spacing: .4em; }
 .acc-ok { display: flex; align-items: center; gap: 10px; font-size: 10.5px; letter-spacing: .3em; }
-.soon { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 560px; max-width: 100%; }
-.soon-card { height: 96px; box-sizing: border-box; padding: 18px; border-radius: 16px; background: var(--well); box-shadow: inset 0 0 0 1px #dcdfe3; opacity: .55; display: flex; flex-direction: column; justify-content: space-between; cursor: not-allowed; }
-.soon-top { display: flex; align-items: center; justify-content: space-between; }
-.soon-tag { font-size: 9.5px; letter-spacing: .3em; color: var(--muted); }
-.soon-n { font-size: 13px; letter-spacing: .14em; }
 
 /* ---- below 1024px: the mobile layout (1b) ------------------------------------------------------ */
 
@@ -399,8 +451,9 @@ textarea.acc-in { height: 88px; resize: none; padding: 10px 12px; line-height: 1
   .minfo .layer { height: auto; font-size: 13px; }
   .minfo-foot { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 8px; border-top: 1px solid var(--line-2); font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 
+  .main { height: auto; min-height: 0; }
   .stagearea { overflow: visible; display: flex; flex-direction: column; }
-  .disk-wrap { position: static; transform: none; padding: 28px 0 8px; gap: 14px; }
+  .disk-wrap { position: relative; left: auto; top: auto; transform: none; padding: 28px 0 8px; gap: 14px; }
   .readout-line { gap: 12px; }
   .stage-dash { width: 20px; }
   .stage-name { font-size: 11.5px; letter-spacing: .34em; }
@@ -452,5 +505,19 @@ textarea.acc-in { height: 88px; resize: none; padding: 10px 12px; line-height: 1
   .li-d { display: none; }
   .base-t { display: none; }
   .mcp-wrap { padding: 24px 20px 40px; justify-content: flex-start; }
-  .acc-two, .soon { grid-template-columns: minmax(0, 1fr); }
+  .acc-two { grid-template-columns: minmax(0, 1fr); }
+  .prims { grid-template-columns: minmax(0, 1fr); }
+  .prim { min-height: 0; }
+  .ways { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .prims { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Motion is decoration here: with reduced motion nothing spins, pulses,
+   slides or scrolls smoothly, and app.js draws no validators. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }

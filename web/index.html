@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lacre</title>
 <meta name="description" content="Attest a signed email on GenLayer and read what it says, agreed by consensus.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app.css">
+<script src="/static/state.js" defer></script>
 <script src="/static/app.js" defer></script>
 </head>
 <body class="app" data-page="app">
@@ -13,22 +15,24 @@
 <header class="nav">
   <a class="logo" href="/"><span class="logo-knob"></span><span class="logo-word">LACRE</span></a>
   <nav class="nav-links" aria-label="Main">
-    <a href="/how.html">How it works</a>
+    <a href="#how">How it works</a>
+    <a href="#primitives">Primitives</a>
+    <a href="#why">Why GenLayer</a>
+    <a href="#mcp">MCP</a>
     <a href="/docs.html">Docs</a>
-    <a href="/why.html">Why GenLayer</a>
-    <a href="/mcp.html">MCP</a>
-    <a class="nav-access" href="/access.html">Access</a>
+    <a class="nav-access" href="#access">Access</a>
   </nav>
   <button class="nav-menu" type="button" aria-label="Menu" aria-expanded="false">
     <svg class="ic ic-open" viewBox="0 0 256 256" aria-hidden="true"><line x1="40" y1="128" x2="216" y2="128"/><line x1="40" y1="64" x2="216" y2="64"/><line x1="40" y1="192" x2="216" y2="192"/></svg>
     <svg class="ic ic-close" viewBox="0 0 256 256" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"/><line x1="200" y1="200" x2="56" y2="56"/></svg>
   </button>
   <div class="nav-drop">
-    <a href="/how.html">How it works</a>
+    <a href="#how">How it works</a>
+    <a href="#primitives">Primitives</a>
+    <a href="#why">Why GenLayer</a>
+    <a href="#mcp">MCP</a>
     <a href="/docs.html">Docs</a>
-    <a href="/why.html">Why GenLayer</a>
-    <a href="/mcp.html">MCP</a>
-    <a href="/access.html">Access</a>
+    <a href="#access">Access</a>
   </div>
 </header>
 
@@ -113,8 +117,10 @@
   </div>
 
   <div class="stagearea" id="stagearea">
+    <h1 class="sr">Lacre</h1>
     <div class="disk-wrap">
       <div class="disk" id="disk" role="img" aria-label="Job progress"></div>
+      <div class="vfield" id="vfield" aria-hidden="true"></div>
       <div class="readout" aria-live="polite">
         <div class="readout-line">
           <span class="stage-num" id="stageNum">00 / 07</span>
@@ -132,9 +138,18 @@
           <span class="lt idle" id="inLt"></span>
           <span class="card-title">INPUT</span>
           <span class="card-sum" id="inSum"></span>
+          <span class="following" id="following" hidden><span class="lt lt-6 running"></span>FOLLOWING <span class="following-id" id="followingId"></span></span>
           <button class="btn-sm" id="btnNew" type="button" hidden>
             <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="24 56 24 104 72 104"/><path d="M67.6 192A88 88 0 1 0 65.8 65.8L24 104"/></svg>NEW
           </button>
+        </div>
+        <div class="card-follow" id="cardFollow" hidden>
+          <button class="linkbtn" id="another" type="button">Start another</button>
+          <span class="confirm" id="confirm" role="alert" hidden>
+            <span class="confirm-t">The current job keeps running on chain</span>
+            <button class="btn-sm" id="anotherYes" type="button">START</button>
+            <button class="linkbtn" id="anotherNo" type="button">Cancel</button>
+          </span>
         </div>
         <div class="card-body" id="cardBody">
           <div class="tabs" role="tablist">
@@ -162,6 +177,11 @@
                 <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><line x1="96" y1="152" x2="160" y2="152"/><line x1="96" y1="120" x2="160" y2="120"/><path d="M160 40h40a8 8 0 0 1 8 8v168a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V48a8 8 0 0 1 8-8h40"/><path d="M88 72V64a40 40 0 0 1 80 0v8Z"/></svg>
               </button>
             </div>
+            <label class="switch">
+              <input type="checkbox" id="remember" checked>
+              <span class="switch-track" aria-hidden="true"></span>
+              <span class="switch-t">Remember for this session</span>
+            </label>
           </div>
           <div class="field">
             <span class="label">EXTRACTION</span>
@@ -173,8 +193,9 @@
             </div>
           </div>
           <button class="btn-main" id="attest" type="button" disabled><span class="lt lt-7 idle"></span>ATTEST</button>
-          <div class="field">
-            <label class="label" for="resume">RESUME</label>
+          <button class="linkbtn resume-link" id="resumeLink" type="button" aria-expanded="false" aria-controls="resumeBox">Resume a job</button>
+          <div class="field" id="resumeBox" hidden>
+            <label class="label" for="resume">JOB ID</label>
             <div class="box">
               <input type="text" id="resume" placeholder="job id" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32">
               <button class="btn-sm" id="follow" type="button">FOLLOW</button>
@@ -195,7 +216,8 @@
         <div class="orow"><span class="orow-k">Job id</span><span class="orow-v" id="oJob"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="job"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
         <div class="orow"><span class="orow-k">Sender domain</span><span class="orow-v" id="oDom"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="dom"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
         <div class="orow"><span class="orow-k">Record id</span><span class="orow-v" id="oRec"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="rec"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button></div>
-        <div class="orow"><span class="orow-k">Consensus tx</span><span class="orow-v" id="oTx"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="tx"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" id="oTxLink" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+        <div class="orow tx" id="oTxRow"><span class="orow-k">Attest tx</span><span class="orow-v" id="oTx"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="tx"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" id="oTxLink" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+        <div class="orow tx" id="oXtxRow"><span class="orow-k">Extract tx</span><span class="orow-v" id="oXtx"></span><button class="cbtn" type="button" title="Copy" data-copy-ref="xtx"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" id="oXtxLink" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
         <div class="checks">
           <div class="check"><span class="lt provisional" id="ckValid"></span>VALID</div>
           <div class="check"><span class="lt provisional" id="ckAligned"></span>ALIGNED</div>
@@ -271,6 +293,187 @@
     </div>
   </div>
 </main>
+
+<div class="land">
+<section class="page sect" id="how">
+  <h2 class="eyebrow">HOW IT WORKS</h2>
+  <ol class="how-mods" aria-label="Stages">
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">01</span><span class="lt lt-9 idle"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Queued</span><span class="mod-eta">&lt; 1 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">02</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Attesting</span><span class="mod-eta">&asymp; 2 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">03</span><span class="lt lt-9 provisional"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">04</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Serving body</span><span class="mod-eta">&asymp; 1 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">05</span><span class="lt lt-9 running"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Extracting</span><span class="mod-eta">&asymp; 3 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">06</span><span class="lt lt-9 provisional"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Finalizing</span><span class="mod-eta">&asymp; 35 min</span></div></div><span class="mod-gap"></span></li>
+    <li class="how-mod"><div class="module mod"><div class="mod-top"><span class="mod-no">07</span><span class="lt lt-9 final"></span></div><div class="mod-rule"></div><div class="mod-txt"><span class="mod-n">Recorded</span><span class="mod-eta">&mdash;</span></div></div></li>
+  </ol>
+  <div class="how-text">
+    <p>Drop a signed email and GenLayer validators fetch the sender's keys and check the signature by consensus.</p>
+    <p>Once that is final, the body is served and its fields are read, agreed on the same way.</p>
+    <p>Only then is it recorded.</p>
+  </div>
+</section>
+
+<section class="page sect" id="primitives">
+  <h2 class="eyebrow">PRIMITIVES</h2>
+  <div class="prims">
+    <div class="module prim" data-prim="router">
+      <div class="prim-top"><span class="prim-no">01</span><span class="lt lt-9 off"></span></div>
+      <h3 class="prim-n">Router</h3>
+      <p class="prim-d">Resolves each role to its current contract, so a new version needs no client change.</p>
+      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+    </div>
+    <div class="module prim" data-prim="keycache">
+      <div class="prim-top"><span class="prim-no">02</span><span class="lt lt-9 off"></span></div>
+      <h3 class="prim-n">Key cache</h3>
+      <p class="prim-d">Holds the sender keys the validators agreed on, with a quarantine for a domain seen the first time.</p>
+      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+    </div>
+    <div class="module prim" data-prim="verifier">
+      <div class="prim-top"><span class="prim-no">03</span><span class="lt lt-9 off"></span></div>
+      <h3 class="prim-n">Verifier</h3>
+      <p class="prim-d">Checks a signed email against the cached key and records whether it is valid and aligned.</p>
+      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+    </div>
+    <div class="module prim" data-prim="extractor_patterns">
+      <div class="prim-top"><span class="prim-no">04</span><span class="lt lt-9 off"></span></div>
+      <h3 class="prim-n">Extractor (patterns)</h3>
+      <p class="prim-d">Reads the fields of a message with patterns agreed per sender domain.</p>
+      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+    </div>
+    <div class="module prim" data-prim="extractor_llm">
+      <div class="prim-top"><span class="prim-no">05</span><span class="lt lt-9 off"></span></div>
+      <h3 class="prim-n">Extractor (LLM)</h3>
+      <p class="prim-d">Reads the fields of a message with a model, accepted only when the validators read it alike.</p>
+      <div class="prim-addr"><span class="prim-v">&mdash;</span><button class="cbtn" type="button" title="Copy" disabled><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button><a class="cbtn" href="#" target="_blank" rel="noopener noreferrer" title="Explorer" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/><line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg></a></div>
+    </div>
+  </div>
+  <div class="prim-foot">
+    <span class="prim-note" id="primNote">Read live from the Router on <span data-net-name>Bradbury</span>. Paste an API key above to show the addresses.</span>
+    <span class="fill"></span>
+    <span class="prim-built">Built on Lacre</span>
+  </div>
+</section>
+
+<section class="page why sect" id="why">
+  <h2 class="eyebrow">WHY GENLAYER</h2>
+  <div class="why-cards">
+    <section class="module why-card">
+      <div class="why-top"><span class="why-no">01</span><span class="lt lt-9 final"></span></div>
+      <span class="fill"></span>
+      <h3 class="why-t">Keys obtained<br>by consensus</h3>
+      <p>Validators each fetch the sender's signing key and must agree on it, so no single resolver decides.</p>
+    </section>
+    <section class="module why-card">
+      <div class="why-top"><span class="why-no">02</span><span class="lt lt-9 final"></span></div>
+      <span class="fill"></span>
+      <h3 class="why-t">New senders<br>as data</h3>
+      <p>An unknown domain needs no integration: its key is fetched and recorded the first time it signs.</p>
+    </section>
+    <section class="module why-card">
+      <div class="why-top"><span class="why-no">03</span><span class="lt lt-9 final"></span></div>
+      <span class="fill"></span>
+      <h3 class="why-t">Interpretation<br>by consensus</h3>
+      <p>What the email says is accepted only when independent validators read it the same way.</p>
+    </section>
+  </div>
+</section>
+
+<section class="mcp-wrap sect" id="mcp">
+  <h2 class="eyebrow mcp-col">MCP</h2>
+  <div class="mcp-col">
+    <div class="plug panel">
+      <div class="plug-inner">
+        <div class="plug-head">
+          <span class="lt lt-10 idle"></span>
+          <span class="plug-word">PLUGIN</span>
+          <span class="plug-count">03</span>
+          <span class="fill"></span>
+        </div>
+        <div class="conns">
+          <div class="conn">
+            <div class="conn-head"><span class="lt idle"></span><span class="conn-title">API</span><span class="fill"></span><span class="conn-tag">REST</span></div>
+            <button class="cline" type="button" data-copy="https://lacre.in-sidr.xyz/attest"><span class="cline-m">POST</span><span class="cline-v">https://lacre.in-sidr.xyz/attest</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            <div class="code">
+              <pre id="mcpCurl">curl -X POST https://lacre.in-sidr.xyz/attest \
+  -H &quot;X-API-Key: $LACRE_KEY&quot; \
+  -F &quot;eml=@message.eml&quot; \
+  -F &quot;extract=auto&quot;</pre>
+              <button class="code-copy" type="button" title="Copy" data-copy-from="mcpCurl"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            </div>
+          </div>
+          <div class="conn">
+            <div class="conn-head"><span class="lt idle"></span><span class="conn-title">MCP</span><span class="fill"></span><span class="conn-tag">STREAMABLE HTTP</span></div>
+            <button class="cline" type="button" data-copy="https://lacre.in-sidr.xyz/mcp"><span class="cline-v">https://lacre.in-sidr.xyz/mcp</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            <div class="code">
+              <pre id="mcpCfg">{
+  &quot;mcpServers&quot;: {
+    &quot;lacre&quot;: {
+      &quot;type&quot;: &quot;http&quot;,
+      &quot;url&quot;: &quot;https://lacre.in-sidr.xyz/mcp&quot;,
+      &quot;headers&quot;: { &quot;X-API-Key&quot;: &quot;YOUR_KEY&quot; }
+    }
+  }
+}</pre>
+              <button class="code-copy" type="button" title="Copy" data-copy-from="mcpCfg"><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+            </div>
+          </div>
+          <div class="conn">
+            <div class="conn-head"><span class="lt idle"></span><span class="conn-title">MAILBOX</span><span class="fill"></span><span class="conn-tag">SMTP</span></div>
+            <a class="btn-mail" href="#plugin">CREATE MAILBOX</a>
+          </div>
+          <div class="conn tools">
+            <div class="conn-head"><span class="lt final"></span><span class="conn-title">TOOLS</span><span class="fill"></span><span class="conn-tag">13</span></div>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_attest"><span class="tool-n">lacre_attest</span><span class="tool-a">eml, extract?</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_job"><span class="tool-n">lacre_job</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_wait_job"><span class="tool-n">lacre_wait_job</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_record"><span class="tool-n">lacre_record</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_extraction"><span class="tool-n">lacre_extraction</span><span class="tool-a">lane, id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_sender"><span class="tool-n">lacre_sender</span><span class="tool-a">domain, selector</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_health"><span class="tool-n">lacre_health</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_account"><span class="tool-n">lacre_account</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_create"><span class="tool-n">lacre_mailbox_create</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailboxes"><span class="tool-n">lacre_mailboxes</span><span class="tool-a">&mdash;</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox"><span class="tool-n">lacre_mailbox</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_jobs"><span class="tool-n">lacre_mailbox_jobs</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+              <button class="tool" type="button" title="Copy" data-copy="lacre_mailbox_disable"><span class="tool-n">lacre_mailbox_disable</span><span class="tool-a">id</span><svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true"><polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg><svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="page access sect" id="access">
+  <h2 class="eyebrow">ACCESS</h2>
+  <div class="ways">
+    <div class="way card">
+      <div class="way-top"><span class="lt off" id="walletLt"></span><span class="way-tag">COMING NEXT</span></div>
+      <h3 class="way-t">Have GEN?</h3>
+      <p class="way-d">Connect wallet, no account needed.</p>
+      <span class="fill"></span>
+      <button class="btn-main" id="walletBtn" type="button" disabled>CONNECT WALLET</button>
+    </div>
+    <div class="way way-form">
+      <h3 class="way-t">Prefer the gateway?</h3>
+      <p class="way-d">Request access.</p>
+      <form class="acc-form" id="accForm" novalidate>
+    <div class="acc-two">
+      <label class="field"><span class="label">NAME</span><input class="acc-in" id="accName" name="name" maxlength="100" autocomplete="name" required></label>
+      <label class="field"><span class="label">EMAIL</span><input class="acc-in mono" id="accEmail" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+    </div>
+    <label class="field"><span class="label">WHAT YOU WILL ATTEST</span><textarea class="acc-in" id="accWhat" name="what" maxlength="2000" placeholder="Shipping notices, invoices&hellip;"></textarea></label>
+    <div class="acc-foot">
+      <button class="btn-main" id="accSend" type="submit" disabled>REQUEST ACCESS</button>
+      <span class="acc-ok" id="accOk" role="status" hidden><span class="lt final"></span>RECEIVED</span>
+      <span class="msg err" id="accMsg" role="alert"></span>
+    </div>
+  </form>
+    </div>
+  </div>
+</section>
+</div>
+
+<div class="vswarm" id="vswarm" aria-hidden="true"></div>
 
 </body>
 </html>

@@ -159,7 +159,7 @@ An unknown key is 401, the key of a disabled account 403. Times are UTC ISO
 | `GET /senders/{domain}/{selector}` | `state`: `active`, `pending` (with `confirm_after` and `can_confirm_now`), `unknown`, `rotated` or `retired`, from the KeyCache at `LATEST_FINAL`. |
 | `GET /account` | the caller's account: `id`, `name`, `enabled`, `unlimited`, `credits` (available now), `held` (reserved by open jobs, already out of `credits`), `charged` (spent by finished jobs), `prices` (`{"attest", "extract"}`), `counts` (`jobs`, `open`, `finalized`, `refused`, `failed`, `mailboxes`), `created_at`, `disabled_at`. |
 | `POST /account/rotate-key` | `{"api_key", "account"}`: a new key, shown this once. The old key stops working at once; the account keeps its id, balance, mailboxes and jobs. |
-| `GET /health` | `chain` (the RPC answers with the right chain id), `router` (it resolves `verifier` and `keycache`), `worker` (alive and passed recently), and `signer` (configured or absent). 200 when all hold, 503 otherwise. `layers` says for each of `router`, `keycache`, `verifier`, `extractor_patterns` and `extractor_llm` whether the Router resolves it now; it is reported only and does not change the status, since a Router may name no Extractor. |
+| `GET /health` | `chain` (the RPC answers with the right chain id), `router` (it resolves `verifier` and `keycache`), `worker` (alive and passed recently), and `signer` (configured or absent). 200 when all hold, 503 otherwise. `layers` says for each of `router`, `keycache`, `verifier`, `extractor_patterns` and `extractor_llm` whether the Router resolves it now, and `addresses` gives each one's address (`""` where the Router names none); both are reported only and do not change the status, since a Router may name no Extractor. |
 
 `GET /h/{token}` and `GET /b/{name}.bin` are not part of the API and take
 no key: they serve the headers of an attest call and the body of an extract
@@ -532,26 +532,27 @@ every 15 seconds, which keeps the tunnel from closing it as idle.
 
 The gateway serves a web app from `web/`: plain HTML, one stylesheet
 (`app.css`), one script (`app.js`), no framework, no build step and no
-runtime dependency. Fonts (Jost, JetBrains Mono) are self-hosted in
+runtime dependency; `state.js` holds what survives a reload. Fonts (Jost, JetBrains Mono) are self-hosted in
 `web/fonts` with their SIL Open Font License files; icons are inline SVG.
 The pages load nothing from another origin, and a Content-Security-Policy
 header holds them to that.
 
 | path | what it is |
 |------|------------|
-| `/` | the main screen: readouts, the disk, attest and the plugin rail |
-| `/how.html` | how an attestation moves, stage by stage |
+| `/` | one scrolling page: the main screen (readouts, the disk, attest and the plugin rail), then the sections `#how`, `#primitives`, `#why`, `#mcp` and `#access` |
 | `/docs.html` | the endpoints and MCP tools, and the rule that only a finalized record is proof |
-| `/why.html` | why GenLayer |
-| `/mcp.html` | the API, MCP and mailbox connectors and the tool list |
-| `/access.html` | the access request form |
-| `/static/*` | the stylesheet, the script and the fonts |
+| `/how.html`, `/why.html`, `/mcp.html`, `/access.html` | 301 to their section of `/` |
+| `/favicon.svg` | the disk, as the page icon |
+| `/static/*` | the stylesheet, the scripts and the fonts |
 
 None of these takes an API key. What is live on the main screen, against
 the API of the same origin with the visitor's key:
 
-- the account (`GET /account`: balance, prices, job counts) and the
-  contract layers (`GET /health`, `layers`);
+- the account (`GET /account`: balance, prices, job counts), read as
+  soon as the key is accepted and again on every change of the job
+  followed, and the contract layers (`GET /health`, `layers`); the
+  Primitives section shows each contract's address from `addresses`, so
+  it follows the Router;
 - attest: a .eml by drop or file picker, or pasted source, with the
   extraction mode, as `POST /attest`; the job is then read from
   `GET /jobs/{id}` every 20 seconds and drawn on the disk, stage by
@@ -559,18 +560,26 @@ the API of the same origin with the visitor's key:
   24 hours when the sender is in verification). A refused or failed job
   shows its reason. The output card shows the sender domain, the valid and
   aligned checks (read from `GET /records/{id}` once final), the record
-  id, the consensus transaction with its explorer link, and the extracted
-  fields; it stays provisional until the job is `finalized` and its
-  transaction `FINALIZED`. A job id pasted under Resume is followed the
-  same way;
+  id, the attest and the extract transactions with their explorer links,
+  and the extracted fields; it stays provisional until the job is
+  `finalized` and its transaction `FINALIZED`. A job id given under
+  "Resume a job" is followed the same way. While a job is in flight the
+  input card says which one it follows; starting another asks first, and
+  the job keeps running on chain;
 - the plugin rail: the curl for `POST /attest` and the MCP config, both
   with the key masked on screen and whole in what is copied, and the
   mailboxes of the account (`GET /mailboxes`, `POST /mailboxes`).
 
-**The key.** The visitor pastes it once per page load. It is kept in a
-JavaScript variable only: never in localStorage, sessionStorage, a cookie
-or the URL, so a reload, or moving to another page, asks for it again. It
-is sent in `X-API-Key` to this origin and nowhere else.
+**What survives a reload.** The job followed is in the URL (`?job=`)
+and in sessionStorage, and is picked up again on load with no click. The
+key is kept in sessionStorage while "Remember for this session" is on (the
+default), so it lasts until the tab closes; with the switch off it is kept
+in memory only and a reload asks for it again. It is never put in
+localStorage, a cookie or the URL, and is sent in `X-API-Key` to this
+origin and nowhere else. localStorage holds only durable choices: the
+switch itself, and the address of a wallet once connected, which is
+checked again on load with `eth_accounts` (no prompt) and forgotten if the
+wallet no longer grants it.
 
 **Access requests.** `POST /access-request` takes JSON
 `{"name", "email", "what"}` with no key: name 1 to 100 characters, a

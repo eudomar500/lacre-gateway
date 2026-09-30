@@ -2,8 +2,9 @@
 
 The pages are static files: no template, no build step, nothing rendered
 per request. They call the API on the same origin with the key the visitor
-pastes, which the page keeps in a variable and never stores, so serving
-them needs no key and they read nothing a key does not already read.
+pastes, which the page keeps in memory or, if the visitor lets it, in the
+tab's sessionStorage, never anywhere longer lived; so serving them needs no
+key and they read nothing a key does not already read.
 """
 
 import collections
@@ -11,21 +12,26 @@ import re
 import threading
 from pathlib import Path
 
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
-# Path -> file. The pages keep their .html names because /mcp is the MCP
-# transport and /docs would read as an API explorer.
+# Path -> file. The docs keep their .html name because /docs would read as
+# an API explorer; everything else is one scrolling page at /.
 PAGES = {
     "/": "index.html",
-    "/how.html": "how.html",
     "/docs.html": "docs.html",
-    "/why.html": "why.html",
-    "/mcp.html": "mcp.html",
-    "/access.html": "access.html",
 }
+# The pages the landing absorbed, sent to their section so old links and
+# bookmarks still land where they meant to.
+REDIRECTS = {
+    "/how.html": "/#how",
+    "/why.html": "/#why",
+    "/mcp.html": "/#mcp",
+    "/access.html": "/#access",
+}
+FAVICON = "favicon.svg"
 # The pages load their own script, style and fonts only, and talk to this
 # origin only, so an injected script or a framing page gets nowhere. A key
 # pasted into the page is sent to this origin and nowhere else.
@@ -157,6 +163,11 @@ def add_pages(app, web_dir=WEB_DIR):
     for path, name in PAGES.items():
         app.add_api_route(path, page_endpoint(web_dir / name), methods=["GET"],
                           include_in_schema=False, name="page:" + name)
+    for path, target in REDIRECTS.items():
+        app.add_api_route(path, redirect_endpoint(target), methods=["GET"],
+                          include_in_schema=False, name="redirect:" + path)
+    app.add_api_route("/" + FAVICON, favicon_endpoint(web_dir / FAVICON), methods=["GET"],
+                      include_in_schema=False, name="favicon")
     app.mount("/static", WebFiles(directory=web_dir), name="static")
     return True
 
@@ -165,3 +176,18 @@ def page_endpoint(file):
     def page():
         return FileResponse(file, media_type="text/html; charset=utf-8", headers=PAGE_HEADERS)
     return page
+
+
+def redirect_endpoint(target):
+    def redirect():
+        # Permanent: the page is gone for good, and a browser may remember it.
+        return RedirectResponse(target, status_code=301, headers=PAGE_HEADERS)
+    return redirect
+
+
+def favicon_endpoint(file):
+    # Browsers ask for it at the root, so it is routed there as well as
+    # being reachable under /static like every other file.
+    def favicon():
+        return FileResponse(file, media_type="image/svg+xml", headers=PAGE_HEADERS)
+    return favicon

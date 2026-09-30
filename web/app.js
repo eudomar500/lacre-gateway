@@ -1,8 +1,9 @@
 /* Lacre web app: one script for every page. No framework, no build step.
  *
- * The API key lives in state.key below and nowhere else: not in storage,
- * not in a cookie, not in the URL, so a reload asks for it again. Every
- * call goes to this origin; the pages carry no address of their own.
+ * What must survive a reload (the key, the job followed, the wallet) is
+ * kept by state.js, which decides where each value lives; this file never
+ * touches storage itself. Every call goes to this origin; the pages carry
+ * no address of their own.
  */
 (function () {
   'use strict';
@@ -16,7 +17,9 @@
   var FLASH_MS = 1400;
   var MOBILE = window.matchMedia('(max-width: 1023.98px)');
   var JOB_ID = /^[0-9a-f]{32}$/;
+  var ADDRESS = /^0x[0-9a-fA-F]{40}$/;
   var EXPLORER = 'https://explorer-bradbury.genlayer.com/';
+  var KEY_SETTLE_MS = 400;
 
   function $(id) { return document.getElementById(id); }
   function all(selector, root) { return Array.prototype.slice.call((root || document).querySelectorAll(selector)); }
@@ -301,6 +304,76 @@
     this.dot.style.animation = spin ? PULSE : 'none';
   };
 
+  // ---- the validators ----------------------------------------------------------------------
+
+  // Five pieces drop in on Attest and orbit the disk at their own heights
+  // while it verifies, snap to its edge with a green light once the
+  // validators agree, turn slowly while it finalizes and lift away when it
+  // is recorded. Three more drift over the page until the job ends. One
+  // frame loop, transforms and opacity only, none of it under reduced motion.
+  var CALM = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var TURN = Math.PI * 2 / 5;
+
+  function Validators(field, swarm) {
+    this.field = field;
+    this.swarm = swarm;
+    this.mode = 'off';
+    this.pieces = [];
+    this.frame = 0;
+    this.c = { x: 0, y: 0, r: 0 };
+  }
+
+  Validators.prototype.set = function (mode, c) {
+    this.c = c;
+    if (CALM.matches || (this.mode === 'off' && mode === 'retract')) { return; }
+    if (this.mode === 'off') {
+      for (var i = 0; i < 8; i++) {
+        var el = document.createElement('span');
+        el.className = 'vpiece';
+        (i < 5 ? this.field : this.swarm).appendChild(el);
+        this.pieces.push({ el: el, i: i % 5, drift: i >= 5, x: i < 5 ? c.x : window.innerWidth * (i - 4) / 4, y: -window.innerHeight, o: 1 });
+      }
+    }
+    this.mode = mode;
+    if (!this.frame) { this.frame = requestAnimationFrame(this.tick.bind(this)); }
+  };
+
+  Validators.prototype.tick = function (now) {
+    var t = now / 1000, c = this.c, mode = this.mode, live = false;
+    this.pieces.forEach(function (p) {
+      var a = t * (mode === 'snap' ? 0.25 : 0.55 + p.i * 0.12) + p.i * TURN, x = p.x, y = -120, o = 0;
+      if (p.drift && mode !== 'retract') {
+        x = window.innerWidth * (0.5 + 0.44 * Math.sin(t * (0.09 + p.i * 0.04) + p.i * 2));
+        y = window.innerHeight * (0.5 + 0.42 * Math.sin(t * (0.13 + p.i * 0.03) + p.i)) + 5 * Math.sin(t * 11 + p.i);
+        o = 0.55;
+      } else if (mode === 'snap') {
+        x = c.x + c.r * Math.cos(a);
+        y = c.y + c.r * 0.56 * Math.sin(a);
+        o = 1;
+      } else if (mode === 'orbit') {
+        var r = c.r * (1.1 + p.i * 0.06);
+        x = c.x + r * Math.cos(a);
+        y = c.y + r * 0.56 * Math.sin(a) - c.r * (0.12 + p.i * 0.1);
+        o = Math.sin(a) < 0 ? 0.5 : 1;
+      }
+      p.x += (x - p.x) * 0.06;
+      p.y += (y - p.y) * 0.06;
+      p.o += (o - p.o) * 0.08;
+      p.el.style.transform = 'translate(' + p.x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px)';
+      p.el.style.opacity = p.o.toFixed(2);
+      p.el.classList.toggle('ok', mode === 'snap' && !p.drift);
+      live = live || p.o > 0.02;
+    });
+    if (mode !== 'retract' || live) {
+      this.frame = requestAnimationFrame(this.tick.bind(this));
+      return;
+    }
+    this.pieces.forEach(function (p) { p.el.remove(); });
+    this.pieces = [];
+    this.mode = 'off';
+    this.frame = 0;
+  };
+
   // ---- the main screen ------------------------------------------------------------------
 
   // The stages the disk shows and the honest time each takes: an on-chain
@@ -359,12 +432,16 @@
       tab: 'file', file: null, paste: '', mode: 'auto',
       source: '', jobId: '', job: null, record: null, jobMode: 'auto', busy: false, timer: 0,
       plugOpen: false, folded: false, leftOpen: window.innerWidth >= 1280, mInfo: false,
-      msg: '', msgErr: false
+      msg: '', msgErr: false, confirm: false, resumeOpen: false
     };
+    var store = window.LacreState;
     var disk = new Disk($('disk'));
+    var validators = new Validators($('vfield'), $('vswarm'));
     var origin = window.location.origin;
     var mailSig = '';
     var exSig = '';
+    var jobSig = '';
+    var inputHeight = 52;
 
     function effectiveTab() { return MOBILE.matches ? 'file' : state.tab; }
 
@@ -454,6 +531,9 @@
       return !!state.file;
     }
 
+    // A job is in flight from the moment it is followed until it ends.
+    function inFlight() { return !!state.jobId && !isTerminal(); }
+
     function setMsg(text, err) {
       state.msg = text || '';
       state.msgErr = !!err;
@@ -495,11 +575,41 @@
       mp[0].textContent = 'attest ' + (prices ? prices.attest : MDASH) + ' cr';
       mp[1].textContent = 'extract ' + (prices ? prices.extract : MDASH) + ' cr';
 
+      renderPrimitives();
+
       $('side').classList.toggle('collapsed', !state.leftOpen);
       $('sideToggle').setAttribute('aria-expanded', String(state.leftOpen));
       $('sideToggle').title = state.leftOpen ? 'Collapse' : 'Expand';
       $('mstrip').setAttribute('aria-expanded', String(state.mInfo));
       $('minfo').classList.toggle('open', state.mInfo);
+    }
+
+    function shortAddress(a) { return a.slice(0, 8) + '\u2026' + a.slice(-6); }
+
+    // The addresses come from /health, which reads them off the Router on
+    // every call, so the section never shows one the Router moved away from.
+    function renderPrimitives() {
+      var addresses = state.health && state.health.addresses;
+      all('[data-prim]').forEach(function (card) {
+        var a = addresses && ADDRESS.test(addresses[card.getAttribute('data-prim')] || '')
+          ? addresses[card.getAttribute('data-prim')] : '';
+        setLight(card.querySelector('.lt'), a ? 'final' : 'off');
+        var v = card.querySelector('.prim-v');
+        v.textContent = a ? shortAddress(a) : addresses ? 'not named' : MDASH;
+        v.title = a;
+        var copy = card.querySelector('button');
+        copy.disabled = !a;
+        if (a) { copy.setAttribute('data-copy', a); } else { copy.removeAttribute('data-copy'); }
+        var link = card.querySelector('a');
+        show(link, !!a);
+        if (a) { link.href = EXPLORER + 'address/' + a; }
+      });
+      show($('primNote'), !addresses);
+    }
+
+    function validatorMode(p) {
+      if (p.phase !== 'running') { return 'retract'; }
+      return p.stages[p.stage].n === 'Finalizing' ? 'snap' : 'orbit';
     }
 
     function renderStage(p) {
@@ -520,6 +630,10 @@
         if (tick.className !== name) { tick.className = name; }
       });
       disk.set(diskSize(), p.phase, p.stage, p.stages.length);
+      var el = $('disk');
+      validators.set(validatorMode(p), {
+        x: el.offsetLeft + el.offsetWidth / 2, y: el.offsetTop + el.offsetHeight / 2, r: el.offsetWidth / 2
+      });
     }
 
     function renderInput(p) {
@@ -531,7 +645,19 @@
         : 'job ' + state.jobId.slice(0, 8);
       var mode = state.job ? modeOfJob(state.job) : state.jobMode;
       $('inSum').textContent = idle ? '' : label + ' ' + DOT + ' ' + mode;
-      show($('btnNew'), !idle);
+      var flying = inFlight();
+      if (!flying) { state.confirm = false; }
+      // While a job runs there is nothing new to start from here: the header
+      // says which job is followed, and starting another takes a confirmation.
+      show($('btnNew'), !idle && !flying);
+      show($('following'), flying);
+      $('followingId').textContent = state.jobId.slice(0, 8);
+      show($('cardFollow'), flying);
+      show($('another'), !state.confirm);
+      show($('confirm'), state.confirm);
+      show($('resumeLink'), idle);
+      show($('resumeBox'), idle && state.resumeOpen);
+      $('resumeLink').setAttribute('aria-expanded', String(state.resumeOpen));
       $('tabFile').setAttribute('aria-selected', String(tab === 'file'));
       $('tabPaste').setAttribute('aria-selected', String(tab === 'paste'));
       show($('drop'), tab === 'file');
@@ -550,8 +676,14 @@
       msg.textContent = state.msg || state.keyMsg;
       msg.classList.toggle('err', state.msg ? state.msgErr : !!state.keyMsg);
       var body = $('cardBody');
-      // Only the header shows while a job runs; the card folds up to it.
-      $('cardIn').style.height = idle ? (52 + body.scrollHeight) + 'px' : '52px';
+      // Only the header, and the follow line under it, show while a job runs;
+      // the card folds up to them. A job restored without a key keeps the
+      // card open, since the key field is what it waits on.
+      var open = idle || !state.account;
+      inputHeight = 52 + (flying ? $('cardFollow').offsetHeight : 0) + (open ? body.scrollHeight : 0);
+      $('cardIn').style.height = inputHeight + 'px';
+      // Focus inside a folded card scrolls it; the header stays on top.
+      $('cardIn').scrollTop = 0;
     }
 
     function renderOutput(p) {
@@ -567,14 +699,17 @@
       $('oDom').textContent = job.sender ? job.sender.domain : MDASH;
       var hasRecord = job.record_id !== undefined && job.record_id !== null;
       $('oRec').textContent = hasRecord ? String(job.record_id) : MDASH;
-      $('oTx').textContent = job.consensus_tx ? shortTx(job.consensus_tx) : MDASH;
       document.querySelector('[data-copy-ref="rec"]').disabled = !hasRecord;
-      document.querySelector('[data-copy-ref="tx"]').disabled = !job.consensus_tx;
-      var link = $('oTxLink');
-      // Only a link into the explorer is followed, whatever the answer holds.
-      var explorer = typeof job.explorer === 'string' && job.explorer.indexOf(EXPLORER) === 0 ? job.explorer : '';
-      show(link, !!explorer);
-      if (explorer) { link.href = explorer; }
+      var x = job.extraction;
+      var xTxs = x && Array.isArray(x.consensus_txs) ? x.consensus_txs : [];
+      txRow('tx', 'oTx', job.consensus_tx, job.explorer, MDASH);
+      txRow('xtx', 'oXtx', x && x.consensus_tx, xTxs.length ? xTxs[xTxs.length - 1].explorer : '',
+        x ? MDASH : 'not requested');
+      // The row of the transaction the current stage waits on is lit:
+      // stages 2 and 3 are the attestation's, 5 and 6 the extraction's.
+      var running = p.phase === 'running';
+      $('oTxRow').classList.toggle('cur', running && (p.stage === 1 || p.stage === 2));
+      $('oXtxRow').classList.toggle('cur', running && !!x && (p.stage === 4 || p.stage === 5));
 
       var valid = 'provisional';
       var aligned = 'provisional';
@@ -589,7 +724,6 @@
       setLight($('ckValid'), valid);
       setLight($('ckAligned'), aligned);
 
-      var x = job.extraction;
       show($('ex'), !!x);
       if (!x) { return; }
       var rows = [];
@@ -626,6 +760,16 @@
           return el;
         }));
       }
+    }
+
+    function txRow(ref, id, tx, explorer, none) {
+      $(id).textContent = tx ? shortTx(tx) : none;
+      document.querySelector('[data-copy-ref="' + ref + '"]').disabled = !tx;
+      var link = $(id + 'Link');
+      // Only a link into the explorer is followed, whatever the answer holds.
+      var url = tx && typeof explorer === 'string' && explorer.indexOf(EXPLORER) === 0 ? explorer : '';
+      show(link, !!url);
+      if (url) { link.href = url; }
     }
 
     function curlText(key) {
@@ -671,11 +815,21 @@
       $('mailMsg').textContent = state.mailMsg || (state.key ? '' : 'Paste your API key to create one');
       $('mailMsg').classList.toggle('err', !!state.mailMsg);
 
+      var slot = plug.parentNode;
+      var below = state.plugOpen && !MOBILE.matches;
       if (MOBILE.matches) {
         plug.style.setProperty('--plug-h', ($('plugInner').scrollHeight) + 'px');
+      } else if (below) {
+        // Open, it would cover the input card, which sits in the same column:
+        // it drops to just under the card instead and takes the room left.
+        var top = 28 + inputHeight + 12;
+        slot.style.top = top + 'px';
+        plug.style.setProperty('--plug-h', Math.max(240, Math.min(712, $('stagearea').clientHeight - top - 20)) + 'px');
       } else {
         plug.style.setProperty('--plug-h', Math.max(300, Math.min(712, $('stagearea').clientHeight - 40)) + 'px');
       }
+      if (!below) { slot.style.top = ''; }
+      slot.classList.toggle('below', below);
     }
 
     function render() {
@@ -703,10 +857,13 @@
         if (res.status === 200 && res.data) {
           state.account = res.data;
           state.keyMsg = '';
+          store.set('key', key);
         } else {
           state.account = null;
           state.keyMsg = failure(res);
+          if (res.status === 401 || res.status === 403) { store.set('key', ''); }
         }
+        store.set('account', state.account);
         render();
       });
     }
@@ -735,7 +892,11 @@
     function setKey(key) {
       if (key === state.key) { return; }
       state.key = key;
+      // A new key is remembered only once /account has taken it, so a typo
+      // is not kept; the one restored on load stays through a gateway outage.
+      if (store.get('key') !== key) { store.set('key', ''); }
       state.account = null;
+      store.set('account', null);
       state.health = null;
       state.mailboxes = [];
       state.newMailbox = '';
@@ -747,7 +908,8 @@
         if (state.key !== key || !state.account) { return; }
         refreshHealth();
         refreshMailboxes();
-        if (state.jobId && !state.timer && !isTerminal()) { startPolling(); }
+        // A job restored from the URL waited for the key; it is read now.
+        if (state.jobId && !isTerminal()) { startPolling(); }
       });
     }
 
@@ -768,6 +930,9 @@
 
     function follow(id, mode, source) {
       state.jobId = id;
+      store.set('jobId', id);
+      state.confirm = false;
+      jobSig = '';
       state.job = null;
       state.record = null;
       state.jobMode = mode;
@@ -775,9 +940,9 @@
       state.folded = false;
       exSig = '';
       if (source !== 'resume') { state.plugOpen = true; }
-      setMsg('');
+      setMsg(state.key ? '' : 'Paste your API key to follow job ' + id.slice(0, 8), !state.key);
       render();
-      startPolling();
+      if (state.key) { startPolling(); }
     }
 
     function poll() {
@@ -787,9 +952,16 @@
       call('GET', '/jobs/' + encodeURIComponent(id), { key: key }).then(function (res) {
         if (state.jobId !== id || state.key !== key) { return; }
         if (res.status === 200 && res.data) {
-          var was = state.job ? state.job.status : '';
           state.job = res.data;
           setMsg('');
+          // Every move of the job can move the account: what it holds, what
+          // it was charged and the counts. It is read again on each one.
+          var x = res.data.extraction || {};
+          var sig = [res.data.status, res.data.stage, res.data.tx_status, x.status, x.tx_status].join('|');
+          if (sig !== jobSig) {
+            if (jobSig) { refreshAccount(); }
+            jobSig = sig;
+          }
           var p = progress();
           // The plugin folds away once the job waits on chain, as in the design.
           if (!state.folded && p.stage >= 2) {
@@ -798,12 +970,12 @@
           }
           if (isTerminal()) {
             stopPolling();
-            if (was !== state.job.status) { refreshAccount(); }
             if (p.phase === 'final') { loadRecord(); }
           }
         } else if (res.status === 404) {
           stopPolling();
           state.jobId = '';
+          store.set('jobId', '');
           state.job = null;
           setMsg('No such job for this key', true);
         } else if (res.status === 401 || res.status === 403) {
@@ -864,6 +1036,8 @@
     function reset() {
       stopPolling();
       state.jobId = '';
+      store.set('jobId', '');
+      state.confirm = false;
       state.job = null;
       state.record = null;
       state.source = '';
@@ -885,6 +1059,7 @@
         return;
       }
       $('resume').value = '';
+      state.resumeOpen = false;
       follow(id, 'auto', 'resume');
     }
 
@@ -932,6 +1107,10 @@
     copyRefs.dom = function () { return state.job && state.job.sender ? state.job.sender.domain : ''; };
     copyRefs.rec = function () { return state.job && state.job.record_id != null ? String(state.job.record_id) : ''; };
     copyRefs.tx = function () { return state.job && state.job.consensus_tx ? state.job.consensus_tx : ''; };
+    copyRefs.xtx = function () {
+      var x = state.job && state.job.extraction;
+      return x && x.consensus_tx ? x.consensus_tx : '';
+    };
     copyRefs.endpoint = function () { return origin + '/attest'; };
     copyRefs.mcpUrl = function () { return origin + '/mcp'; };
     // The key shows masked; what is copied is ready to paste and run.
@@ -963,7 +1142,16 @@
     });
     $('paste').addEventListener('input', function (event) { state.paste = event.target.value; render(); });
     var keyInput = $('key');
+    var keyTimer = 0;
     keyInput.addEventListener('change', function () { setKey(keyInput.value.trim()); });
+    // Typed, or filled in by a password manager, the key is read once it
+    // settles, without waiting for the field to lose focus.
+    keyInput.addEventListener('input', function () {
+      clearTimeout(keyTimer);
+      keyTimer = setTimeout(function () { setKey(keyInput.value.trim()); }, KEY_SETTLE_MS);
+    });
+    $('remember').checked = store.remember();
+    $('remember').addEventListener('change', function () { store.setRemember($('remember').checked); });
     keyInput.addEventListener('keydown', function (event) {
       if (event.key === 'Enter') { setKey(keyInput.value.trim()); }
     });
@@ -979,6 +1167,14 @@
     });
     $('attest').addEventListener('click', attest);
     $('btnNew').addEventListener('click', reset);
+    $('another').addEventListener('click', function () { state.confirm = true; render(); });
+    $('anotherNo').addEventListener('click', function () { state.confirm = false; render(); });
+    $('anotherYes').addEventListener('click', reset);
+    $('resumeLink').addEventListener('click', function () {
+      state.resumeOpen = !state.resumeOpen;
+      render();
+      if (state.resumeOpen) { $('resume').focus(); }
+    });
     $('follow').addEventListener('click', resume);
     $('resume').addEventListener('keydown', function (event) { if (event.key === 'Enter') { resume(); } });
     $('plugClosed').addEventListener('click', function () {
@@ -996,8 +1192,38 @@
     });
     MOBILE.addEventListener('change', render);
     if (document.fonts && document.fonts.ready) { document.fonts.ready.then(render); }
-    // The MCP page links here to create a mailbox; the plugin opens for it.
-    if (window.location.hash === '#plugin') { state.plugOpen = true; }
+    // The MCP section links here to create a mailbox; the plugin opens for
+    // it, back at the top of the page where it lives.
+    function openPluginFromHash() {
+      if (window.location.hash !== '#plugin') { return; }
+      state.plugOpen = true;
+      window.scrollTo(0, 0);
+      render();
+      if (state.key && state.account) { refreshMailboxes(); }
+    }
+    window.addEventListener('hashchange', openPluginFromHash);
+    openPluginFromHash();
+
+    // The wallet round builds on this; for now the button only reports a
+    // wallet that reconnected silently.
+    function renderWallet(address) {
+      setLight($('walletLt'), address ? 'final' : 'off');
+      $('walletBtn').textContent = address
+        ? 'CONNECTED ' + address.slice(0, 6) + '\u2026' + address.slice(-4) : 'CONNECT WALLET';
+    }
+    store.subscribe('wallet', renderWallet);
+    renderWallet(store.get('wallet'));
+    store.reconnectWallet();
+
+    // What the last visit left: the job in the URL or the session, and the
+    // key if it was remembered. No click is needed to pick either up.
+    var savedKey = store.get('key');
+    var savedJob = store.get('jobId');
+    if (savedKey) {
+      keyInput.value = savedKey;
+      setKey(savedKey);
+    }
+    if (savedJob) { follow(savedJob, 'auto', 'resume'); }
     render();
   }
 
@@ -1047,7 +1273,7 @@
     initNav();
     var page = document.body.getAttribute('data-page');
     if (page === 'app') { initApp(); }
-    if (page === 'access') { initAccess(); }
+    if ($('accForm')) { initAccess(); }
   }
 
   if (document.readyState === 'loading') {

@@ -763,30 +763,34 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
                     network=settings.network, last_worker_pass=iso(beat),
                     inbound="configured" if settings.inbound_secret else "off",
                     inbound_unknown_dropped=store.unknown_inbound(),
-                    layers=layers(checks["chain"]))
+                    **layers(checks["chain"]))
         # The layers are reported, not required: a Router that names no
         # Extractor is a deployment choice, and attesting still works.
         return JSONResponse(status_code=200 if all(checks.values()) else 503, content=body)
 
     def layers(chain_up):
-        """Which contract the Router resolves now, each on its own, for the
-        readout of the web app."""
+        """Which contract the Router resolves now, each on its own, and at
+        which address, for the readout and the primitives of the web app.
+        An address is "" where nothing resolves, so a page never shows one
+        the Router no longer names."""
         def resolves(read):
             if not chain_up:
-                return False
+                return ""
             try:
-                return bool(read())
+                return str(read() or "")
             except ChainUnavailable:
-                return False
-        verifier = resolves(contracts.verifier)
-        keycache = resolves(contracts.keycache)
-        return {
-            "router": verifier or keycache,
-            "keycache": keycache,
-            "verifier": verifier,
+                return ""
+        found = {
+            "keycache": resolves(contracts.keycache),
+            "verifier": resolves(contracts.verifier),
             "extractor_patterns": resolves(lambda: contracts.extractor("patterns")),
             "extractor_llm": resolves(lambda: contracts.extractor("llm")),
         }
+        router_up = bool(found["verifier"] or found["keycache"])
+        addresses = dict(found, router=contracts.router if router_up else "")
+        flags = {name: bool(addresses[name]) for name in
+                 ("router", "keycache", "verifier", "extractor_patterns", "extractor_llm")}
+        return {"layers": flags, "addresses": {name: addresses[name] for name in flags}}
 
     @app.get("/h/{token}")
     def served_headers(token: str):

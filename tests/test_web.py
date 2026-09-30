@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 import support
 from support import API_KEY
 from lacre_gateway.app import create_app
-from lacre_gateway.web import ACCESS_PER_IP, ACCESS_WINDOW_S, PAGES, WEB_DIR, RateLimit
+from lacre_gateway.web import (ACCESS_PER_IP, ACCESS_WINDOW_S, PAGES, REDIRECTS, WEB_DIR,
+                               RateLimit)
 
 ADMIN_TOKEN = "test-admin-" + "t" * 32
 ADMIN = {"X-Admin-Token": ADMIN_TOKEN}
@@ -19,7 +20,9 @@ AUTH = {"X-API-Key": API_KEY}
 # its job answers link to. Everything else the pages load is on /static.
 ALLOWED_HOSTS = {"lacre.in-sidr.xyz", "explorer-bradbury.genlayer.com"}
 URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'<>)]*")
-TEXT_SUFFIXES = {".html", ".css", ".js", ".txt"}
+TEXT_SUFFIXES = {".html", ".css", ".js", ".txt", ".svg"}
+# An SVG names its namespace as a URL; nothing is fetched from it.
+XMLNS = re.compile(r'xmlns="[^"]*"')
 
 
 class AliveWorker(SimpleNamespace):
@@ -62,6 +65,7 @@ def test_every_page_is_served_without_a_key(web, path):
 
 @pytest.mark.parametrize("path,kind", [
     ("/static/app.css", "text/css"), ("/static/app.js", "javascript"),
+    ("/static/state.js", "javascript"), ("/favicon.svg", "image/svg+xml"),
     ("/static/fonts/jost-latin.woff2", "font/woff2"),
     ("/static/fonts/jetbrains-mono-latin.woff2", "font/woff2")])
 def test_the_assets_are_served_without_a_key(web, path, kind):
@@ -80,7 +84,7 @@ def test_static_does_not_leave_the_web_directory(web):
 def test_every_asset_a_page_names_exists(web):
     for name in PAGES.values():
         text = (WEB_DIR / name).read_text(encoding="ascii")
-        for ref in re.findall(r'(?:src|href)="(/static/[^"]+)"', text):
+        for ref in re.findall(r'(?:src|href)="(/static/[^"]+|/favicon\.svg)"', text):
             assert web.client.get(ref).status_code == 200, (name, ref)
     css = (WEB_DIR / "app.css").read_text(encoding="ascii")
     for ref in re.findall(r"url\('([^']+)'\)", css):
@@ -110,7 +114,7 @@ def test_the_web_directory_names_no_host_but_the_two_allowed():
         # home and the font project's; nothing loads from them.
         if path.name.startswith("OFL-"):
             continue
-        for url in URL.findall(path.read_text(encoding="ascii")):
+        for url in URL.findall(XMLNS.sub("", path.read_text(encoding="ascii"))):
             host = url.split("://", 1)[1].split("/", 1)[0]
             assert url.startswith("https://") and host in ALLOWED_HOSTS, (path.name, url)
             seen.add(host)
@@ -133,10 +137,64 @@ def test_every_font_has_its_license_next_to_it():
         assert "SIL OPEN FONT LICENSE Version 1.1" in text
 
 
-def test_the_pages_keep_the_key_out_of_storage():
+def test_only_the_store_touches_storage():
     script = (WEB_DIR / "app.js").read_text(encoding="ascii")
     for word in ("localStorage", "sessionStorage", "document.cookie", "indexedDB"):
         assert word not in script
+    store = (WEB_DIR / "state.js").read_text(encoding="ascii")
+    assert "document.cookie" not in store and "indexedDB" not in store
+
+
+def test_the_key_never_reaches_local_storage():
+    store = (WEB_DIR / "state.js").read_text(encoding="ascii")
+    # localStorage is reached through durable() alone, which takes only the
+    # wallet and the remember switch; the key goes through session().
+    calls = re.compile(r"localStorage\.\w+")
+    body = store[store.index("function durable("):]
+    body = body[:body.index("\n  }\n") + 4]
+    assert len(calls.findall(store)) == len(calls.findall(body)) == 3
+    assert "if (slot !== WALLET_SLOT && slot !== REMEMBER_SLOT)" in body
+    assert "durable(KEY_SLOT" not in store
+    assert "session(KEY_SLOT, remember ? value : '')" in store
+
+
+def test_every_page_links_the_favicon():
+    for name in PAGES.values():
+        text = (WEB_DIR / name).read_text(encoding="ascii")
+        assert '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' in text, name
+
+
+def test_every_anchor_the_landing_links_to_exists():
+    index = (WEB_DIR / "index.html").read_text(encoding="ascii")
+    ids = set(re.findall(r'id="([^"]+)"', index))
+    for name in PAGES.values():
+        text = (WEB_DIR / name).read_text(encoding="ascii")
+        for anchor in re.findall(r'href="/?#([^"]+)"', text):
+            assert anchor in ids or anchor == "plugin", (name, anchor)
+    for section in ("how", "primitives", "why", "mcp", "access"):
+        assert section in ids
+
+
+# ---- the pages the landing absorbed -------------------------------------------------
+
+@pytest.mark.parametrize("path", sorted(REDIRECTS))
+def test_an_absorbed_page_redirects_to_its_section(web, path):
+    response = web.client.get(path, follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/#" + path[1:-len(".html")]
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert not (WEB_DIR / path[1:]).exists()
+
+
+def test_a_redirect_lands_on_the_landing(web):
+    response = web.client.get("/mcp.html")
+    assert response.status_code == 200
+    assert response.text == (WEB_DIR / "index.html").read_text(encoding="ascii")
+
+
+def test_only_the_landing_and_the_docs_are_pages():
+    assert set(PAGES) == {"/", "/docs.html"}
+    assert {p.name for p in WEB_DIR.glob("*.html")} == {"index.html", "docs.html"}
 
 
 # ---- /health layers ---------------------------------------------------------------
@@ -162,6 +220,27 @@ def test_a_chain_that_is_down_reports_every_layer_down(web):
     web.chain.up = False
     body = web.client.get("/health", headers=AUTH).json()
     assert not any(body["layers"].values())
+    assert not any(body["addresses"].values())
+
+
+def test_health_names_the_address_of_each_contract(web):
+    web.worker.tick()
+    body = web.client.get("/health", headers=AUTH).json()
+    assert body["addresses"] == {
+        "router": support.ROUTER, "keycache": support.KEYCACHE, "verifier": support.VERIFIER,
+        "extractor_patterns": support.EXTRACTOR, "extractor_llm": support.EXTRACTOR_LLM}
+
+
+def test_an_address_follows_the_router(web):
+    web.worker.tick()
+    moved = "0x" + "c7" * 20
+    web.chain.resolves["verifier"] = moved
+    web.chain.resolves["extractor_llm"] = ""
+    body = web.client.get("/health", headers=AUTH).json()
+    assert body["addresses"]["verifier"] == moved
+    # Not named is empty, never the address it used to have.
+    assert body["addresses"]["extractor_llm"] == ""
+    assert body["layers"]["extractor_llm"] is False
 
 
 # ---- POST /access-request -------------------------------------------------------

@@ -109,6 +109,33 @@ def test_an_attestation_holds_then_charges_attest(api):
     assert balance(api, account) == 9
 
 
+def test_the_account_moves_with_every_job_event(api):
+    # The web panel reads /account again on each change of a job; each
+    # read has to show that change, from the hold to the charge.
+    auth, account = customer(api, credits=10)
+
+    def read():
+        return api.client.get("/account", headers=auth).json()
+
+    before = read()
+    assert (before["credits"], before["held"], before["counts"]["open"]) == (10, 0, 0)
+    job_id = upload(api, auth, extract="patterns").json()["job_id"]
+    queued = read()
+    assert (queued["credits"], queued["held"], queued["counts"]["open"]) == (8, 2, 1)
+    attest(api, job_id)
+    job = api.client.get("/jobs/%s" % (job_id,), headers=auth).json()
+    assert job["status"] == "extracting" and job["consensus_tx"]
+    assert read()["counts"]["open"] == 1
+    extract(api, "record")
+    job = api.client.get("/jobs/%s" % (job_id,), headers=auth).json()
+    # The card shows both transactions, each with its explorer link.
+    assert job["extraction"]["consensus_tx"] and job["extraction"]["consensus_tx"] != job["consensus_tx"]
+    assert job["extraction"]["consensus_txs"][-1]["explorer"].endswith(job["extraction"]["consensus_tx"])
+    done = read()
+    assert (done["credits"], done["held"], done["charged"]) == (8, 0, 2)
+    assert (done["counts"]["open"], done["counts"]["finalized"]) == (0, 1)
+
+
 def test_an_invalid_verifier_record_still_charges_attest(api):
     auth, account = customer(api)
     job_id = upload(api, auth).json()["job_id"]

@@ -337,5 +337,7 @@ def test_no_response_carries_key_material(api):
     api.worker.tick()
     texts = [api.client.get(p, headers=AUTH).text for p in (
         "/health", "/jobs/%s" % (job_id,), "/senders/amazon.com/synthsel2026a")]
+    # The modulus is c3 repeated; a run longer than any 40 hex digit
+    # address (the KeyCache fixture is c3 too, and /health names it) is key.
     for text in texts:
-        assert "c3c3c3" not in text and "private" not in text.lower()
+        assert "c3" * 21 not in text and "private" not in text.lower()
