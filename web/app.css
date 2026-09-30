@@ -193,7 +193,10 @@ body.app { min-height: 100vh; }
 
 /* ---- main screen: disk and readout --------------------------------------------------------- */
 
-.stagearea { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+/* Only the x axis is clipped, for the output card parked off to the right:
+   the open plugin may run past the stage's bottom, over the next section.
+   Browsers without clip drop the second declaration and keep hidden. */
+.stagearea { flex: 1; min-width: 0; position: relative; overflow: hidden; overflow: clip visible; }
 .disk-wrap { position: absolute; left: 56px; top: 50%; transform: translateY(-52%); display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .disk { display: inline-block; line-height: 0; }
 .readout { display: flex; flex-direction: column; align-items: center; gap: 10px; }

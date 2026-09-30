@@ -1054,9 +1054,12 @@
       } else if (below) {
         // Open, it would cover the input card, which sits in the same column:
         // it drops to just under the card instead and takes the room left.
+        // With less than 240 left it runs past the stage, never taller than
+        // the viewport under the nav, and scrolls inside.
         var top = 28 + inputHeight + 12;
+        var room = $('stagearea').clientHeight - top - 20;
         slot.style.top = top + 'px';
-        plug.style.setProperty('--plug-h', Math.max(240, Math.min(712, $('stagearea').clientHeight - top - 20)) + 'px');
+        plug.style.setProperty('--plug-h', Math.min(712, window.innerHeight - 64 - 40, Math.max(240, room)) + 'px');
       } else {
         plug.style.setProperty('--plug-h', Math.max(300, Math.min(712, $('stagearea').clientHeight - 40)) + 'px');
       }
