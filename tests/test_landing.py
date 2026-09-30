@@ -8,6 +8,7 @@ genlayer-js the wallet path loads is the pinned self-hosted build.
 
 import html
 import re
+from html.parser import HTMLParser
 
 import pytest
 
@@ -174,6 +175,66 @@ def test_a_page_answers_head(api, path):
     assert head.status_code == 200
     assert head.content == b""
     assert head.headers["content-security-policy"] == CSP
+
+
+# ---- the nav ---------------------------------------------------------------------------------
+
+class NavItems(HTMLParser):
+    """The direct children of the desktop links and of the mobile drop, as
+    (tag, attributes, text) in page order."""
+
+    CONTAINERS = ("nav-links", "nav-drop")
+
+    def __init__(self):
+        super().__init__()
+        self.lists = {name: [] for name in self.CONTAINERS}
+        self.current = None
+        self.depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if self.current is None:
+            if attrs.get("class") in self.CONTAINERS:
+                self.current, self.depth = attrs["class"], 0
+            return
+        self.depth += 1
+        if self.depth == 1:
+            self.lists[self.current].append([tag, attrs, ""])
+
+    def handle_endtag(self, tag):
+        if self.current is None:
+            return
+        if self.depth == 0:
+            self.current = None
+        else:
+            self.depth -= 1
+
+    def handle_data(self, data):
+        if self.current is not None and self.depth >= 1:
+            self.lists[self.current][-1][2] += data
+
+
+def nav_items():
+    parser = NavItems()
+    parser.feed((WEB_DIR / "index.html").read_text(encoding="ascii"))
+    return parser.lists
+
+
+@pytest.mark.parametrize("where", NavItems.CONTAINERS)
+def test_the_nav_offers_the_wallet_right_before_access(where):
+    items = nav_items()[where]
+    names = [text.strip().upper() for _, _, text in items]
+    assert names[-2:] == ["CONNECT WALLET", "ACCESS"], names
+    tag, attrs, text = items[-2]
+    assert tag == "button" and attrs.get("type") == "button"
+    assert attrs.get("class") == "nav-wallet"
+    assert text == "CONNECT WALLET"
+
+
+def test_access_stays_the_only_pill():
+    items = nav_items()["nav-links"]
+    pills = [text for _, attrs, text in items if "nav-access" in (attrs.get("class") or "")]
+    assert pills == ["Access"]
 
 
 # ---- the Integrate snippet -----------------------------------------------------------------

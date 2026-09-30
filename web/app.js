@@ -706,6 +706,7 @@
     }
 
     function shortAddress(a) { return a.slice(0, 8) + '\u2026' + a.slice(-6); }
+    function navAddress(a) { return a.slice(0, 6) + '...' + a.slice(-4); }
 
     function age(iso) {
       var s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -1731,6 +1732,22 @@
       $('walletMsg').textContent = state.walletMsg ||
         (!present && !address ? 'No wallet in this browser. Any wallet that injects window.ethereum works.' : '');
       $('walletMsg').classList.toggle('err', !!state.walletMsg);
+      // The nav item is the same wallet seen from the top of the page.
+      all('.nav-wallet').forEach(function (item) {
+        item.disabled = state.walletBusy;
+        if (!address) {
+          item.textContent = state.walletBusy ? 'CONNECTING' : 'CONNECT WALLET';
+          item.removeAttribute('title');
+          return;
+        }
+        var lt = document.createElement('span');
+        lt.className = 'lt lt-7 ' + (state.walletChain ? 'final' : 'provisional');
+        var text = document.createElement('span');
+        text.className = 'mono';
+        text.textContent = navAddress(address);
+        item.replaceChildren(lt, text);
+        item.title = address;
+      });
     }
 
     function refreshBalance() {
@@ -1778,6 +1795,17 @@
       state.keyOpen = false;
       render();
       $('drop').focus();
+    });
+    // Without a wallet to connect, or once connected, the card has the rest:
+    // why there is none, or the balance and Disconnect.
+    all('.nav-wallet').forEach(function (item) {
+      item.addEventListener('click', function () {
+        if (!state.walletAddr && wallet.provider()) { connect(); return; }
+        var nav = document.querySelector('.nav');
+        nav.classList.remove('menu-open');
+        nav.querySelector('.nav-menu').setAttribute('aria-expanded', 'false');
+        $(state.walletAddr ? 'access' : 'walletCard').scrollIntoView();
+      });
     });
     $('walletOff').addEventListener('click', function () {
       state.walletMsg = '';

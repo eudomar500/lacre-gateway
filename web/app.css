@@ -112,6 +112,11 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .nav-links a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
 .nav-links a.nav-access { color: var(--ink); padding: 8px 16px; border-radius: 16px; border-bottom: none; box-shadow: inset 0 0 0 1px var(--ink); }
 .nav-links a.nav-access[aria-current="page"] { background: var(--ink); color: var(--bg); }
+.nav-wallet { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 6px 0; border: none; border-bottom: 1px solid transparent; background: none; font: inherit; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; white-space: nowrap; color: var(--muted); cursor: pointer; }
+.nav-wallet:hover { color: var(--ink); }
+.nav-wallet:disabled { cursor: default; }
+/* An address is read, not styled: no caps, no tracking. */
+.nav-wallet .mono { font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--ink); }
 .nav-menu { display: none; width: 40px; height: 40px; border: none; border-radius: 20px; background: #ffffff; box-shadow: inset 0 0 0 1px var(--ring); color: var(--ink); font-size: 18px; align-items: center; justify-content: center; cursor: pointer; }
 .nav-menu .ic-close { display: none; }
 .nav.menu-open .nav-menu .ic-open { display: none; }
@@ -119,6 +124,7 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .nav-drop { display: none; position: absolute; top: 64px; left: 0; right: 0; background: var(--nav); border-bottom: 1px solid var(--line); box-shadow: 0 18px 30px rgba(30, 34, 40, .10); flex-direction: column; padding: 8px 28px 16px; }
 .nav-drop a { font-size: 12px; letter-spacing: .24em; text-transform: uppercase; text-decoration: none; color: var(--ink); padding: 14px 0; border-bottom: 1px solid #e6e8eb; }
 .nav-drop a:last-child { border-bottom: none; }
+.nav-drop .nav-wallet { font-size: 12px; color: var(--ink); padding: 14px 0; border-bottom: 1px solid #e6e8eb; }
 
 /* ---- shared controls ------------------------------------------------------------- */
 
