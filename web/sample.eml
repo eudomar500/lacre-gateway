@@ -1,0 +1,119 @@
+Delivered-To: insidrmarketingdev@gmail.com
+Received: by 2002:a05:7412:112:b0:213:de74:5f3a with SMTP id 18csp72315rdd;
+        Wed, 30 Sep 2026 09:15:28 -0700 (PDT)
+X-Received: by 2002:a05:7301:3a94:b0:339:79c9:a711 with SMTP id 5a478bee46e88-34cdcfaaccbmr2087294eec.33.1790784928181;
+        Wed, 30 Sep 2026 09:15:28 -0700 (PDT)
+ARC-Seal: i=2; a=rsa-sha256; t=1790784928; cv=pass;
+        d=google.com; s=arc-20260327;
+        b=PQo9cvnSJWdfg1Wkjw+9/nZmhcektWRuEo9ibGyqnYXVaFq0gsbxbJUN+6IhFDII7m
+         4eB8Xzq32hnzWYgP49nrPyikz8FOhjizqQgNCuekPHqtZt9z3J4DmLyRL2pjHGfDdfuX
+         cs86Ye+7xUh8Ga0nxjCs2d+Juo0+mLOYrY3dQVHk1XCzsd7Sxpe66/kH+wnO9e7465Z3
+         7HFwuLp18Jkll65h4gnXaQW7uQeFBabWL1o0v8DirXn4yOJ2pjemYQtWvEZ62iZiFxi8
+         t3CrD8kXTKqp3g1rdYikZfAJ19/hGqsyzR0afiAPOk/MKNDKYRPeHGCFqzeJ3nUvK/zh
+         2/VA==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=cc:to:subject:message-id:date:from:mime-version:dkim-signature;
+        bh=J7/fd4f2+QoksX2JAOEaIpF7lRUoMLuprd5YTmSaXoo=;
+        fh=rh4jG7pbqaaiGNE40AeN7k5UkItA140GoreBpt1oQ9g=;
+        b=coAVO5NEDMVYYyh+5640t/IgO55uW7II9YdA0bpaBjux9Oaed/g5pHhZ+/N3unQ0UE
+         uNbWLSiNcRlPYlPJ6uVSOlyuEwjxP1QPA86Bpcm0djKdJZomzDtrYDnXsBKasfGfZ5ik
+         B0msUW8DknvHjOuT7FS+CAhToyI22Ht9LQiTJm167roHs1RkxzARFcUT/8dldy5NUAgg
+         ZFwa/gVsDPtpCH9CXi1U8+/rbH1mQTMv0pgeBtwGhSYIm5ecZijoiqawOSZdqvlFoQjZ
+         5AJx8EXdPB8QqlvymIB9eBzEaK5Y/c5H2gsaNTYw/GNSrWIF/LcwXBNRwxBZEVGjqEvT
+         iLcw==;
+        dara=google.com
+ARC-Authentication-Results: i=2; mx.google.com;
+       dkim=pass header.i=@gmail.com header.s=20251104 header.b=VJZOSNTq;
+       arc=pass (i=1);
+       spf=pass (google.com: domain of belugasystem.ai@gmail.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=belugasystem.ai@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com;
+       dara=pass header.i=@gmail.com
+Return-Path: <belugasystem.ai@gmail.com>
+Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])
+        by mx.google.com with SMTPS id 5a478bee46e88-34dabb0108csor33177eec.0.2026.09.30.09.15.27
+        for <insidrmarketingdev@gmail.com>
+        (Google Transport Security);
+        Wed, 30 Sep 2026 09:15:28 -0700 (PDT)
+Received-SPF: pass (google.com: domain of belugasystem.ai@gmail.com designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@gmail.com header.s=20251104 header.b=VJZOSNTq;
+       arc=pass (i=1);
+       spf=pass (google.com: domain of belugasystem.ai@gmail.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=belugasystem.ai@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com;
+       dara=pass header.i=@gmail.com
+ARC-Seal: i=1; a=rsa-sha256; t=1790784927; cv=none;
+        d=google.com; s=arc-20260327;
+        b=Pm9ihS7dc+Ebtpr1SPehleNpOlHgfCzLmvzB3J7HlAKUxOacBXPT4tzQ7bmmCgQ4Pf
+         seiwOZSHaUpjOUit1qeX0kRMmiIQoaW/NOmpYXTmXd1V0I74AslVerVvmI5r9XW6eBlN
+         zdpKmhjU8ghrpmkrDlhA/oCZNEx77UQecox11HjgmLIKoHOutczvtMSS3eVLwHlJLFCU
+         7i4DSubuLoVShlFOeXhxXJKldwFoxDYYeTtwB5qd1yBO8FXG498xT1zWOTOHbxoGsKSu
+         ijYGMawKaeLsnk6o5UnQL+CUvIIVD44VZQiUKEzgXw3M6OybzaVLuRh9GfQaLoJVMv5x
+         fhQg==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=cc:to:subject:message-id:date:from:mime-version:dkim-signature;
+        bh=J7/fd4f2+QoksX2JAOEaIpF7lRUoMLuprd5YTmSaXoo=;
+        fh=rh4jG7pbqaaiGNE40AeN7k5UkItA140GoreBpt1oQ9g=;
+        b=COeuptXP0G2WLqvYHgEQCl7SGxBbUZMs1suI00mh5iKOmn5tMQs/kACQIqpKxqqiTy
+         g+GB7qmZjJ9mZufXReCgc6qg4Bc8VUV/JDwJVUzXqoTHZCiR+NoWlyWViBZb8/63NKxE
+         12pQYBdOZi+2QH/KDu87UwpGPQMgLIfnfXJ5VSD0EPsOdpkj2k+Cbs2eKttd6+0OoFFl
+         7phywy7L7PYPwxEGS6ayFqpGps99sc0PH/RnpuaFcQsLu7AWl+OY784Y0y3vWmHv0cyP
+         x9YE0DFvj4/Fnre6YWaC4qnjyx4jNSVNpuvTxdY5ifFD8vHt+ThDp+voAqb/voZOzvxv
+         s+UA==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1790784927; x=1791389727; dara=google.com;
+        h=content-type:cc:to:subject:message-id:date:from:mime-version:from
+         :to:cc:subject:date:message-id:reply-to:content-type;
+        bh=J7/fd4f2+QoksX2JAOEaIpF7lRUoMLuprd5YTmSaXoo=;
+        b=VJZOSNTqFFF7t3Ip05KvqN0LP+vmiwlM9w/W39TwTv7nXDDda8qJYtvIa6TN0aB4x5
+         1d1tFZ+7ZLXnv2YQu4G7suFTrjzqe2mPRKcAba9RgArrOp9xfvV4UKW4ICk6O09TC7pP
+         vZYtf78Dsn9JdmENVQQz6nFdQBpgq7F7Eo/4ZuYslommQhimATigIQ9zt8M5PqIIYBjY
+         PczlIoOq5iionsjZDbSjGrprfwQ0bpRoGWXuXi+oTO+1/+iJvRyEFghMknGfNaufQwd0
+         OTNheAqo/VR9xFYONX1v+dRo8j/xTVbF6NvhLpGn3nrDslVLQ36U/1mBwWXHwW/7/+he
+         1/pA==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20260707; t=1790784927; x=1791389727;
+        h=content-type:cc:to:subject:message-id:date:from:mime-version
+         :x-gm-gg:x-gm-message-state:from:to:cc:subject:date:message-id
+         :reply-to:content-type;
+        bh=J7/fd4f2+QoksX2JAOEaIpF7lRUoMLuprd5YTmSaXoo=;
+        b=FKHOgznIgrKcfsCfX42BjmovdlP8Ug76ZWC+9XxdO2Z1yEUippTPZvvAMdumqQI0Sr
+         WMgThOdVrqAIZcla4i7J/5FheOSnP99m8rwfgRXhAnXIY+WLuYL8XB0mPVFrzYVgUI8C
+         vY797+y6f62FmE87IR2rrtil7uAlApmJE5zvP6I1lNQ9OwCbWQGz9R+9de+GCVduM1go
+         SR9JTyh2PS4z2418NBXqpvOtx+e/yV6fvXtPxvaIKi8U+QV1i2hYhaQFOk1Q4AesuAot
+         PVGyvOUbHEHdVLF9+PzVu9YTHmMv4wYbmri0pdxD1Ip7ba+SXK4dfQYQlomIjDkEE1Kx
+         P5+g==
+X-Gm-Message-State: AFuF++mS1z7wwcZ+ktUq89BaNFHG6sUI1g2QKiJ+zlWUrhrcoAz6nVys
+	lnL8ZtdHKOx7RXGdyR+0LIAhicja7bkBPMs0xsN6WTaNCAIg82NTVnfnl5Lz3fnawfxgOCYOTYI
+	slS+hmSM1yMBTaN8K42hwNfiv6g0iMvywXg==
+X-Gm-Gg: AYBFou0INdvWdAaeUozbXfIYvTgSVC4YC2akfxLA7YsusHDv8C+4nW/1lR9c4n9GIIy
+	NSUkzbOjpOywP94c7cM85Qmiqo3A0/Sy/egSkax0yP90B5n9v1d4X/ryzlTzhe0iatx3ny69IBz
+	QI2628uxWTNzusLPvQFndbB1oTCpxXUNloUqSz6ENBvveiFNMJdjY8MnrR+6PCRLHxyYQxGxf3S
+	Qs2Dgmzx7hMazC9gOCfImkbjhH9Iepn7welva8d4NIPJCuAcQlqmih7WG3kV57QV6E9ZG5NyYZc
+	xsP24uWqGCDRNjo72s8KqgldTXyXC2nMPUIZNoTqGHdVQ+MBzWC1pw==
+X-Received: by 2002:a05:701b:4346:b0:143:490b:93da with SMTP id
+ a92af1059eb24-14d33f38ccemr1739527c88.39.1790784927430; Wed, 30 Sep 2026
+ 09:15:27 -0700 (PDT)
+MIME-Version: 1.0
+From: Belugasystem <belugasystem.ai@gmail.com>
+Date: Wed, 30 Sep 2026 12:15:15 -0400
+X-Gm-Features: AclHuK9j-ZCKYHVZiVf8jDroNjzk7gtHCjuHzxMQIEKALhT_E_ZA0TkAGErtyU0
+Message-ID: <CANcYwof_BQAA7Wo2w6ohXX_uskLY_G8T09JpQHLoT0-Cro5oAA@mail.gmail.com>
+Subject: Order 4471 shipped
+To: lacre-nt4ojz7racph@in-sidr.xyz
+Cc: insidrmarketingdev@gmail.com
+Content-Type: multipart/alternative; boundary="00000000000077fcf3065cb59bdb"
+
+--00000000000077fcf3065cb59bdb
+Content-Type: text/plain; charset="UTF-8"
+
+The order 4471
+Has been shipped
+
+--00000000000077fcf3065cb59bdb
+Content-Type: text/html; charset="UTF-8"
+
+<div dir="ltr">The order 4471<br>Has been shipped</div>
+
+--00000000000077fcf3065cb59bdb--

@@ -520,6 +520,7 @@
     var origin = window.location.origin;
     var mailSig = '';
     var exSig = '';
+    var txSig = '';
     var jobSig = '';
     var jobsSig = '';
     var inputHeight = 52;
@@ -887,6 +888,52 @@
       show($('oJobRow'), !walletCard);
       show($('oXtxRow'), !walletCard);
       show($('exWallet'), walletCard);
+      if (walletCard) { earlierTxRows([], []); }
+    }
+
+    // The two tx rows hold the latest attestation and extraction attempts;
+    // a retry leaves the earlier ones in rows of their own above them, so
+    // every transaction a job sent stays reachable, oldest first.
+    function earlierTxRows(attest, extract) {
+      $('oTxRow').querySelector('.orow-k').textContent = txLabel('Attest tx', attest.length);
+      $('oXtxRow').querySelector('.orow-k').textContent = txLabel('Extract tx', extract.length);
+      var sig = JSON.stringify([attest, extract]);
+      if (sig === txSig) { return; }
+      txSig = sig;
+      all('.orow.tx.earlier').forEach(function (el) { el.remove(); });
+      attest.slice(0, -1).forEach(function (t, i) {
+        $('oTxRow').before(earlierTxRow(txLabel('Attest tx', i + 1), t));
+      });
+      extract.slice(0, -1).forEach(function (t, i) {
+        $('oXtxRow').before(earlierTxRow(txLabel('Extract tx', i + 1), t));
+      });
+    }
+
+    function txLabel(name, n) { return n > 1 ? name + ' ' + n : name; }
+
+    function earlierTxRow(label, t) {
+      var el = document.createElement('div');
+      el.className = 'orow tx earlier';
+      var k = document.createElement('span');
+      k.className = 'orow-k';
+      k.textContent = label;
+      var v = document.createElement('span');
+      v.className = 'orow-v';
+      v.textContent = shortTx(t.tx);
+      el.appendChild(k);
+      el.appendChild(v);
+      el.appendChild(copyButton('cbtn', t.tx));
+      if (typeof t.explorer === 'string' && t.explorer.indexOf(EXPLORER) === 0) {
+        var link = document.createElement('a');
+        link.className = 'cbtn';
+        link.href = t.explorer;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.title = 'Explorer';
+        link.insertAdjacentHTML('beforeend', ICON_LINK);
+        el.appendChild(link);
+      }
+      return el;
     }
 
     // The wallet's attestation: the requester is the wallet, the record is
@@ -934,6 +981,7 @@
       document.querySelector('[data-copy-ref="rec"]').disabled = !hasRecord;
       var x = job.extraction;
       var xTxs = x && Array.isArray(x.consensus_txs) ? x.consensus_txs : [];
+      earlierTxRows(Array.isArray(job.consensus_txs) ? job.consensus_txs : [], xTxs);
       txRow('tx', 'oTx', job.consensus_tx, job.explorer, NONE);
       txRow('xtx', 'oXtx', x && x.consensus_tx, xTxs.length ? xTxs[xTxs.length - 1].explorer : '',
         x ? NONE : 'not requested');
@@ -1621,6 +1669,19 @@
       takeFile(event.target.files && event.target.files[0]);
       event.target.value = '';
     });
+    // The sample goes in as a File, so everything after reads it exactly as
+    // a dropped one.
+    $('sample').addEventListener('click', function () {
+      fetch('/static/sample.eml').then(function (res) {
+        if (!res.ok) { throw new Error('HTTP ' + res.status); }
+        return res.blob();
+      }).then(function (blob) {
+        takeFile(new File([blob], 'sample.eml', { type: 'message/rfc822' }));
+      }).catch(function () {
+        setMsg('The sample could not be loaded', true);
+        render();
+      });
+    });
     $('paste').addEventListener('input', function (event) { state.paste = event.target.value; render(); });
     var keyInput = $('key');
     var keyTimer = 0;
@@ -1920,6 +1981,8 @@
   var ICON_COPY = '<svg class="ic ic-copy" viewBox="0 0 256 256" aria-hidden="true">' +
     '<polyline points="168 168 216 168 216 40 88 40 88 88"/><rect x="40" y="88" width="128" height="128" rx="8"/></svg>';
   var ICON_OK = '<svg class="ic ic-ok" viewBox="0 0 256 256" aria-hidden="true"><polyline points="40 144 96 200 224 72"/></svg>';
+  var ICON_LINK = '<svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><polyline points="216 104 216 40 152 40"/>' +
+    '<line x1="144" y1="112" x2="216" y2="40"/><path d="M184 144v64a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8V80a8 8 0 0 1 8-8h64"/></svg>';
 
   // ---- the access form -------------------------------------------------------------------------------
 

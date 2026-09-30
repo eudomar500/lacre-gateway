@@ -250,6 +250,8 @@ body.app { min-height: 100vh; }
 .drop-name { font-family: var(--mono); font-size: 12px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drop-size { font-family: var(--mono); font-size: 10px; color: var(--muted-3); }
 .paste { height: 108px; box-sizing: border-box; resize: none; border: none; border-radius: 12px; padding: 10px 12px; background: var(--well); box-shadow: inset 0 1px 3px rgba(30, 34, 40, .10), inset 0 0 0 1px #dcdfe3; font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--ink); }
+.sample { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: -6px; }
+.sample-t { font-size: 11px; color: var(--muted-3); }
 .pills { display: flex; gap: 6px; }
 .pill { height: 28px; padding: 0 12px; border: none; border-radius: 14px; background: #ffffff; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--ring); font-family: var(--mono); font-size: 10.5px; cursor: pointer; }
 .pill[aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }

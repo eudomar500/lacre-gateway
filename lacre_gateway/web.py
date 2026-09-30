@@ -160,6 +160,10 @@ class WebFiles(StaticFiles):
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
         response.headers.update(PAGE_HEADERS)
+        # Set here rather than left to the host's mime table, which may not
+        # know .eml.
+        if path.endswith(".eml"):
+            response.headers["content-type"] = "message/rfc822"
         return response
 
 

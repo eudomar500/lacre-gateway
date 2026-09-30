@@ -7,4 +7,6 @@ __pycache__/
 # Real mail never enters the repository; the one test message is synthetic.
 *.eml
 !tests/fixtures/amazon_layout.eml
+# The sample the page offers, signed by hand and served as it is.
+!web/sample.eml
 .wrangler/

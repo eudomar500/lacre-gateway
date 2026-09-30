@@ -83,6 +83,15 @@ def test_the_assets_are_served_without_a_key(web, path, kind):
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
+def test_the_sample_is_served_as_it_is(web):
+    response = web.client.get("/static/sample.eml")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "message/rfc822"
+    # Any change to a byte, a line end included, breaks its signature.
+    assert response.content == (WEB_DIR / "sample.eml").read_bytes()
+    assert b"\r\n" in response.content
+
+
 def test_static_does_not_leave_the_web_directory(web):
     assert web.client.get("/static/../lacre_gateway/app.py").status_code == 404
     assert web.client.get("/static/%2e%2e/README.md").status_code == 404
