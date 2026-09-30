@@ -543,7 +543,9 @@ Open Font License files; icons and glyphs are inline SVG. genlayer-js
 license texts are next to it), and loaded only when a wallet is used. The
 pages load nothing from another origin, and a Content-Security-Policy
 header holds them to that; the one other origin they talk to is the
-Bradbury RPC, for the wallet path.
+Bradbury RPC, for the wallet path. Both pages end in the same footer,
+"Built by Insidr Labs on GenLayer", two plain links out to in-sidr.xyz and
+genlayer.com.
 
 | path | what it is |
 |------|------------|
@@ -551,7 +553,12 @@ Bradbury RPC, for the wallet path.
 | `/docs.html` | the endpoints and MCP tools, and the rule that only a finalized record is proof |
 | `/how.html`, `/why.html`, `/mcp.html`, `/access.html` | 301 to their section of `/`, for GET and HEAD |
 | `/favicon.svg` | the disk, as the page icon |
-| `/static/*` | the stylesheet, the scripts and the fonts |
+| `/static/*` | the stylesheet, the scripts, the fonts and `sample.eml`, served as `message/rfc822` |
+
+`web/sample.eml` has to stay byte for byte as it was signed, so
+`.gitattributes` marks it `-text -diff` (git never rewrites its CRLF line
+ends) and `.gitignore` lets it in past the rule that keeps every other
+.eml out.
 
 None of these takes an API key. The page presents Lacre as a primitive
 first: under the disk, when idle, "Integrate: require_attestation in your
@@ -568,15 +575,18 @@ visitor's key:
   followed, and its jobs (`GET /jobs`), newest first in the left panel:
   a click follows one, and a click on a count narrows the list to it;
 - attest: a .eml by drop or file picker, or pasted source, with the
-  extraction mode, as `POST /attest`; the job is then read from
-  `GET /jobs/{id}` every 20 seconds and drawn on the disk, stage by
+  extraction mode, as `POST /attest` (TRY THE SAMPLE fetches
+  `/static/sample.eml`, a DKIM-signed gmail.com test message from a
+  throwaway account, and takes it as a dropped file); the job is then
+  read from `GET /jobs/{id}` every 20 seconds and drawn on the disk, stage by
   stage, with the time each on-chain step takes (about 35 minutes; up to
   24 hours when the sender is in verification). A refused or failed job
   shows its reason. The output card shows the sender domain, the valid and
   aligned checks (read from `GET /records/{id}` once final), the record
-  id, the attest and the extract transactions with their explorer links,
-  and the extracted fields; it stays provisional until the job is
-  `finalized` and its transaction `FINALIZED`. A job id given under
+  id, every consensus transaction the job sent with its explorer link
+  (each attest attempt, then each extract attempt, numbered oldest first
+  when there was more than one), and the extracted fields; it stays
+  provisional until the job is `finalized` and its transaction `FINALIZED`. A job id given under
   "Resume a job" is followed the same way. While a job is in flight the
   input card says which one it follows; starting another asks first, and
   the job keeps running on chain;
@@ -588,7 +598,10 @@ visitor's key:
 wallet (EIP-1193) and puts it on Bradbury, chain 4221: switch, and add the
 chain when the wallet does not know it, including Rabby's `-32603
 Unrecognized chain ID` answer. The card shows the address, its GEN balance
-on Bradbury and Disconnect. With a wallet connected and no key, the input
+on Bradbury and Disconnect. The top nav carries the same wallet: CONNECT
+WALLET, then the short address, which opens a popover with the full
+address, the GEN balance (or "Not on Bradbury") and Disconnect, closed by
+Escape or a click outside. With a wallet connected and no key, the input
 card reads "Paying with wallet 0x..." and ATTEST, with no request to the
 API: `dkim.js` cuts the headers blob from the .eml as `tools/headers_blob.py`
 does (the signature the gateway would pick, the fields its `h=` covers, in
