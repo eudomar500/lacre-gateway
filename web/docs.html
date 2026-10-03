@@ -38,7 +38,7 @@
 <main>
   <div class="rule">
     <span class="lt lt-9 provisional"></span>
-    <span class="rule-t">A job is not proof. The record on chain is, and only once its status is <span class="mono">finalized</span>: about 35 min per on-chain step, up to 24 h the first time a sender domain is seen.</span>
+    <span class="rule-t">A job is not proof. The record on chain is, and only once its status is <span class="mono">finalized</span>: about 35 min per on-chain step, up to 24 h the first time a key is seen for a domain and selector (<span class="mono">selector._domainkey.domain</span>).</span>
   </div>
   <div class="docs">
     <section class="docs-col" aria-label="Endpoints">
@@ -80,7 +80,7 @@
     {
       &quot;lane&quot;: &quot;patterns&quot;,
       &quot;extractor&quot;: &quot;0x&hellip;&quot;,
-      &quot;id&quot;: &quot;1&quot;,
+      &quot;id&quot;: &quot;3&quot;,
       &quot;record&quot;: {
         &quot;match&quot;: true,
         &quot;reason&quot;: &quot;extracted&quot;,

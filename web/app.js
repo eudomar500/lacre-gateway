@@ -611,7 +611,7 @@
         eta = 'An appeal is in progress ' + DOT + ' ' + state.wstate.status;
       } else if (job && job.stage === 'sender in verification') {
         // A sender key seen for the first time waits out the KeyCache quarantine.
-        eta = 'Sender in verification ' + DOT + ' up to 24 h the first time a domain is seen';
+        eta = 'Sender in verification ' + DOT + ' up to 24 h the first time a key is seen for a domain and selector';
         if (job.sender_confirm_after) { eta += ' ' + DOT + ' confirm after ' + utc(job.sender_confirm_after); }
       } else if (job && job.stage === 'waiting for the Verifier') {
         eta = 'Waiting for the Verifier ' + DOT + ' one call at a time';
