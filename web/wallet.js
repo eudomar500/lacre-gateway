@@ -27,6 +27,8 @@
   var EXPLORER = 'https://explorer-bradbury.genlayer.com';
   var FAUCET = 'https://testnet-faucet.genlayer.foundation';
   var CURRENCY = { name: 'GEN Token', symbol: 'GEN', decimals: 18 };
+  // 0.002 GEN in wei: less than this and a send cannot pay its gas.
+  var GAS_FLOOR = 2000000000000000n;
   var FINAL = 'latest-final';
   var NONFINAL = 'latest-nonfinal';
 
@@ -49,6 +51,14 @@
   }
 
   function provider() { return window.ethereum && window.ethereum.request ? window.ethereum : null; }
+
+  // MetaMask sends JSON-RPC ids as strings, which the Bradbury RPC refuses
+  // (-32700, Request.id of type int), so it can neither read the chain nor
+  // send there. Rabby also sets isMetaMask, and works.
+  function isMetaMask() {
+    var eth = provider();
+    return !!eth && !!eth.isMetaMask && !eth.isRabby;
+  }
 
   // ---- genlayer-js, on demand ---------------------------------------------------------
 
@@ -154,6 +164,26 @@
       var at = text.indexOf('.');
       return at < 0 ? text : text.slice(0, at + 5).replace(/\.?0+$/, '');
     });
+  }
+
+  // Whether the address holds the GEN floor for gas on Bradbury, read from
+  // the RPC before the wallet is opened, so a wallet without gas is told
+  // why instead of answering with a bare internal error.
+  function hasGas(address) {
+    return rpc('eth_getBalance', [address, 'latest']).then(function (wei) {
+      return BigInt(wei) >= GAS_FLOOR;
+    });
+  }
+
+  // The wallet's -32603, or a message that only says "internal error":
+  // looked for down the cause chain, since the SDK wraps what the wallet said.
+  function isInternalError(error) {
+    for (var e = error, depth = 0; e && typeof e === 'object' && depth < 8; e = e.cause, depth += 1) {
+      if (e.code === -32603) { return true; }
+      if (e.data && e.data.originalError && e.data.originalError.code === -32603) { return true; }
+      if (/internal error/i.test(String(e.shortMessage || '') + ' ' + String(e.message || ''))) { return true; }
+    }
+    return /internal error/i.test(String(error || ''));
   }
 
   // ---- before sending: the Verifier's own refusals ------------------------------------------
@@ -322,11 +352,14 @@
     DECIDED: DECIDED,
     ENDED: ENDED,
     provider: provider,
+    isMetaMask: isMetaMask,
     loadSdk: loadSdk,
     ensureChain: ensureChain,
     onBradbury: onBradbury,
     isUnknownChain: isUnknownChain,
     balance: balance,
+    hasGas: hasGas,
+    isInternalError: isInternalError,
     prepare: prepare,
     send: send,
     txIdOf: txIdOf,

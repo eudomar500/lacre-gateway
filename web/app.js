@@ -502,7 +502,7 @@
       tab: 'file', file: null, paste: '', mode: 'auto',
       source: '', jobId: '', job: null, record: null, jobMode: 'auto', busy: false, timer: 0,
       plugOpen: false, folded: false, leftOpen: window.innerWidth >= 1280, mInfo: false,
-      msg: '', msgErr: false, confirm: false, resumeOpen: false,
+      msg: '', msgErr: false, msgHelp: '', confirm: false, resumeOpen: false,
       // The wallet: its address, GEN on Bradbury, and whether it is there.
       walletAddr: store.get('wallet'), walletBal: '', walletChain: true, walletMsg: '', walletBusy: false,
       keyOpen: false,
@@ -658,6 +658,86 @@
     function setMsg(text, err) {
       state.msg = text || '';
       state.msgErr = !!err;
+      state.msgHelp = '';
+    }
+
+    // Why the wallet cannot send, with the faucet and the key path as links:
+    // 'gas', 'chain', 'internal' or 'metamask'. state.msg keeps the same words as text.
+    var HELP = {
+      gas: ['This wallet has no GEN on Testnet Bradbury for gas. Get some at ', 'faucet', ', or ', 'key', ' instead.'],
+      chain: ['The wallet is not on Testnet Bradbury (chain ' + wallet.CHAIN_ID + '). Switch it and try again, or ',
+        'key', ' instead.'],
+      internal: ['The wallet returned an internal error. With MetaMask this is the Bradbury RPC rejecting its ' +
+        'requests: use Rabby, or ', 'key', ' instead. With other wallets, check for GEN at ', 'faucet',
+        ' and try again.'],
+      metamask: ['MetaMask cannot send transactions to Testnet Bradbury\'s RPC yet (the RPC rejects its ' +
+        'requests). Use Rabby, or ', 'key', ' instead.']
+    };
+
+    // The MetaMask notice above ATTEST WALLET, made on first use. The button
+    // stays usable: the notice warns, it does not block.
+    var metaMaskNote = null;
+
+    function metaMaskNotice() {
+      if (!metaMaskNote) {
+        metaMaskNote = document.createElement('div');
+        metaMaskNote.className = 'msg err';
+        metaMaskNote.setAttribute('role', 'note');
+        metaMaskNote.style.marginBottom = '8px';
+        metaMaskNote.replaceChildren.apply(metaMaskNote, helpNodes('metamask'));
+        metaMaskNote.addEventListener('click', useKeyLink);
+        $('attest').before(metaMaskNote);
+      }
+      return metaMaskNote;
+    }
+
+    function helpNodes(kind) {
+      return HELP[kind].map(function (part) {
+        if (part === 'faucet') {
+          var a = document.createElement('a');
+          a.href = wallet.FAUCET;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = wallet.FAUCET;
+          return a;
+        }
+        if (part === 'key') {
+          var k = document.createElement('a');
+          k.href = '#key';
+          k.setAttribute('data-usekey', '');
+          k.textContent = 'use an API key';
+          return k;
+        }
+        return document.createTextNode(part);
+      });
+    }
+
+    function helpText(kind) {
+      return HELP[kind].map(function (part) {
+        return part === 'faucet' ? wallet.FAUCET : part === 'key' ? 'use an API key' : part;
+      }).join('');
+    }
+
+    function setHelp(kind) {
+      setMsg(helpText(kind), true);
+      state.msgHelp = kind;
+    }
+
+    // "use an API key" in a wallet message or notice: the key field, the way
+    // the "Use an API key" button opens it.
+    function useKeyLink(event) {
+      if (!event.target.closest('[data-usekey]')) { return; }
+      event.preventDefault();
+      state.keyOpen = true;
+      setMsg('');
+      render();
+      $('key').focus();
+    }
+
+    function helpError(kind) {
+      var error = new Error(helpText(kind));
+      error.help = kind;
+      return error;
     }
 
     // ---- render -------------------------------------------------------------------------
@@ -853,6 +933,7 @@
       show($('keyField'), !paying);
       show($('modeField'), !paying);
       $('attestT').textContent = paying ? 'ATTEST ' + DOT + ' WALLET' : 'ATTEST';
+      show(metaMaskNotice(), idle && paying && wallet.isMetaMask());
       show($('resumeBox'), idle && state.resumeOpen);
       $('resumeLink').setAttribute('aria-expanded', String(state.resumeOpen));
       $('tabFile').setAttribute('aria-selected', String(tab === 'file'));
@@ -870,7 +951,17 @@
       $('attest').disabled = !canAttest();
       $('follow').disabled = !state.key || state.busy;
       var msg = $('inMsg');
-      msg.textContent = state.msg || state.keyMsg;
+      var help = state.msg && state.msgHelp ? state.msgHelp : '';
+      if (help) {
+        // Built once per message, so a render does not pull a link from under the pointer.
+        if (msg.getAttribute('data-help') !== help) {
+          msg.replaceChildren.apply(msg, helpNodes(help));
+          msg.setAttribute('data-help', help);
+        }
+      } else {
+        msg.removeAttribute('data-help');
+        msg.textContent = state.msg || state.keyMsg;
+      }
       msg.classList.toggle('err', state.msg ? state.msgErr : !!state.keyMsg);
       var body = $('cardBody');
       // Only the header, and the follow line under it, show while a job runs;
@@ -1409,10 +1500,19 @@
       render();
       inputBytes().then(function (bytes) {
         var cut = window.LacreDkim.forInline(bytes);
-        setMsg('Reading the Verifier, its fee and the key of ' + cut.domain);
+        setMsg('Checking the GEN this wallet holds on Bradbury');
         render();
-        return wallet.ensureChain().then(function () {
-          state.walletChain = true;
+        // Read from the RPC, so a wallet without gas is never opened.
+        return wallet.hasGas(from).then(function (enough) {
+          if (!enough) { throw helpError('gas'); }
+          setMsg('Reading the Verifier, its fee and the key of ' + cut.domain);
+          render();
+          return wallet.ensureChain();
+        }).then(function () {
+          return wallet.onBradbury();
+        }).then(function (on) {
+          state.walletChain = on;
+          if (!on) { throw helpError('chain'); }
           return wallet.prepare(router, from, cut);
         }).then(function (ready) {
           setMsg('Confirm attest_inline in your wallet ' + DOT + ' fee ' + ready.fee + ' wei, ' + cut.bytes.length +
@@ -1442,7 +1542,17 @@
         state.busy = false;
         // Once the wallet has sent, the chain decides; a later error in the
         // SDK's own wait does not stop the follow, which reads the receipt.
-        if (!state.wtx) { setMsg(error instanceof window.LacreDkim.BlobError ? error.message : walletError(error), true); }
+        if (!state.wtx) {
+          if (error && error.help) {
+            setHelp(error.help);
+          } else if (wallet.isInternalError(error)) {
+            // The wallet's own words say nothing; they stay in the console.
+            console.error('attest_inline: the wallet returned an internal error', error);
+            setHelp('internal');
+          } else {
+            setMsg(error instanceof window.LacreDkim.BlobError ? error.message : walletError(error), true);
+          }
+        }
         render();
       });
     }
@@ -1708,6 +1818,7 @@
       pill.addEventListener('click', function () { state.mode = pill.getAttribute('data-mode'); render(); });
     });
     $('attest').addEventListener('click', attest);
+    $('inMsg').addEventListener('click', useKeyLink);
     $('btnNew').addEventListener('click', reset);
     $('another').addEventListener('click', function () { state.confirm = true; render(); });
     $('anotherNo').addEventListener('click', function () { state.confirm = false; render(); });
