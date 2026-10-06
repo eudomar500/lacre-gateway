@@ -653,6 +653,30 @@ repository, with the product design files; nothing of it (its runtime,
 support scripts or the file itself) is copied here. `web/` reproduces it
 by hand.
 
+### POST /rpc
+
+The Bradbury RPC refuses a JSON-RPC request whose `id` is a string (-32700,
+`Request.id of type int`), and MetaMask numbers its requests with strings,
+so on the public RPC it can neither read the chain nor send there.
+`POST /rpc` takes no key and stands in front of
+`https://rpc-bradbury.genlayer.com`: it takes one request or a batch, gives
+every id an integer of its own, forwards it, and puts the original ids back
+in the answer. A null id and a notification go as they came; the RPC's own
+errors come back as it sent them, with the ids restored. No method is
+refused, and none of the caller's headers reach the RPC.
+
+Limits: `application/json` only (415 otherwise), 256 KiB a body (413), 100
+requests a batch, JSON-RPC 2.0 only (400, -32600; -32700 for a body that
+is not JSON), 10 seconds for the RPC to answer (504; 502 when it cannot be
+reached or answers with something not JSON), and 300 requests a minute
+from one address (`CF-Connecting-IP`), 6000 from all together (429 with
+`Retry-After`), a batch counting once. Answers are open to every origin.
+
+The web app adds Bradbury to a wallet with `https://lacre.in-sidr.xyz/rpc`
+as its RPC. A wallet that already has chain 4221 is only switched to it, so
+a MetaMask set up earlier on the public RPC keeps that RPC: set the
+Bradbury RPC to `https://lacre.in-sidr.xyz/rpc` in its network settings.
+
 ## Run locally against the fixtures
 
 ```
@@ -713,7 +737,7 @@ The service listens on 127.0.0.1:8080. `deploy/cloudflared.yml.example` is
 the tunnel config that publishes it at `https://lacre.in-sidr.xyz`, with
 `/h/{token}`, `/b/{name}.bin`, `/inbound`, the API paths (`/jobs` among
 them), `/mcp`, and the web app (`/`, the five pages, `/static/*`,
-`/access-request`, `/primitives`) only, not `/admin/*`. Check with
+`/access-request`, `/primitives`, `/rpc`) only, not `/admin/*`. Check with
 `curl -H "X-API-Key: ..." https://lacre.in-sidr.xyz/health`.
 
 Mailboxes need `LACRE_INBOUND_SECRET` in `gateway.env` and the Email

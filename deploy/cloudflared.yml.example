@@ -28,9 +28,10 @@ ingress:
   # gateway. how, why, mcp and access.html only redirect to their section
   # of /, and stay routed so old links still land. /primitives is the
   # Router's reading at FINALIZED, public chain state, served from a copy
-  # at most ten minutes old.
+  # at most ten minutes old. /rpc relays to the Bradbury RPC with the
+  # request ids renumbered, rate limited per address by the gateway.
   - hostname: lacre.in-sidr.xyz
-    path: ^/((how|docs|why|mcp|access)\.html|favicon\.svg|static/.+|access-request|primitives)?$
+    path: ^/((how|docs|why|mcp|access)\.html|favicon\.svg|static/.+|access-request|primitives|rpc)?$
     service: http://127.0.0.1:8080
   # The admin API creates accounts and credits them. It is meant for
   # localhost (curl on the VPS against 127.0.0.1:8080), so it is not routed
