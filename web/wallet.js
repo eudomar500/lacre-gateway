@@ -24,6 +24,10 @@
   var CHAIN_HEX = '0x107d';
   var CHAIN_NAME = 'GenLayer Bradbury testnet';
   var RPC = 'https://rpc-bradbury.genlayer.com';
+  // What the wallet is given when it adds the chain: the gateway's /rpc,
+  // which forwards to RPC with every request id made an integer. Reads and
+  // estimates here still go to RPC itself.
+  var WALLET_RPC = 'https://lacre.in-sidr.xyz/rpc';
   var EXPLORER = 'https://explorer-bradbury.genlayer.com';
   var FAUCET = 'https://testnet-faucet.genlayer.foundation';
   var CURRENCY = { name: 'GEN Token', symbol: 'GEN', decimals: 18 };
@@ -53,8 +57,10 @@
   function provider() { return window.ethereum && window.ethereum.request ? window.ethereum : null; }
 
   // MetaMask sends JSON-RPC ids as strings, which the Bradbury RPC refuses
-  // (-32700, Request.id of type int), so it can neither read the chain nor
-  // send there. Rabby also sets isMetaMask, and works.
+  // (-32700, Request.id of type int). Added from here, the chain points at
+  // WALLET_RPC, which renumbers them; a MetaMask that already had the chain
+  // on RPC keeps it, and is told how to change it if a send fails. Rabby
+  // also sets isMetaMask, and works on either.
   function isMetaMask() {
     var eth = provider();
     return !!eth && !!eth.isMetaMask && !eth.isRabby;
@@ -122,13 +128,14 @@
 
   function addChainParams() {
     return {
-      chainId: CHAIN_HEX, chainName: CHAIN_NAME, rpcUrls: [RPC],
+      chainId: CHAIN_HEX, chainName: CHAIN_NAME, rpcUrls: [WALLET_RPC],
       nativeCurrency: CURRENCY, blockExplorerUrls: [EXPLORER]
     };
   }
 
   // Puts the wallet on Bradbury: switch, and when it does not know the
-  // chain, add it. A wallet that adds a chain should select it (EIP-3085)
+  // chain, add it. A wallet that already has the chain, on whichever RPC,
+  // is only switched. A wallet that adds a chain should select it (EIP-3085)
   // but not every one does, so the result is read back and switched once
   // more if needed.
   function ensureChain() {
@@ -184,6 +191,19 @@
       if (/internal error/i.test(String(e.shortMessage || '') + ' ' + String(e.message || ''))) { return true; }
     }
     return /internal error/i.test(String(error || ''));
+  }
+
+  // The Bradbury RPC refusing a string id: -32700, or its words for it,
+  // looked for down the cause chain as in isInternalError.
+  var ID_REFUSED = /Request\.id of type int|-32700/i;
+
+  function isRpcIdError(error) {
+    for (var e = error, depth = 0; e && typeof e === 'object' && depth < 8; e = e.cause, depth += 1) {
+      if (e.code === -32700) { return true; }
+      if (e.data && e.data.originalError && e.data.originalError.code === -32700) { return true; }
+      if (ID_REFUSED.test(String(e.shortMessage || '') + ' ' + String(e.message || ''))) { return true; }
+    }
+    return ID_REFUSED.test(String(error || ''));
   }
 
   // ---- before sending: the Verifier's own refusals ------------------------------------------
@@ -347,6 +367,7 @@
 
   window.LacreWallet = {
     CHAIN_ID: CHAIN_ID,
+    WALLET_RPC: WALLET_RPC,
     EXPLORER: EXPLORER,
     FAUCET: FAUCET,
     DECIDED: DECIDED,
@@ -360,6 +381,7 @@
     balance: balance,
     hasGas: hasGas,
     isInternalError: isInternalError,
+    isRpcIdError: isRpcIdError,
     prepare: prepare,
     send: send,
     txIdOf: txIdOf,

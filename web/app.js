@@ -509,6 +509,8 @@
       // The wallet's attest_inline in flight: what state.js keeps, the stored
       // consensus state last read, and the outcome once FINALIZED.
       wtx: store.get('pendingTx'), wstate: null, wresult: null, wfail: '', wtimer: 0, wticking: false,
+      // Whether the last wallet send failed with -32700 or an internal error.
+      metaMaskFailed: false,
       pulseBackUntil: 0
     };
     var disk = new Disk($('disk'));
@@ -667,15 +669,16 @@
       gas: ['This wallet has no GEN on Testnet Bradbury for gas. Get some at ', 'faucet', ', or ', 'key', ' instead.'],
       chain: ['The wallet is not on Testnet Bradbury (chain ' + wallet.CHAIN_ID + '). Switch it and try again, or ',
         'key', ' instead.'],
-      internal: ['The wallet returned an internal error. With MetaMask this is the Bradbury RPC rejecting its ' +
-        'requests: use Rabby, or ', 'key', ' instead. With other wallets, check for GEN at ', 'faucet',
-        ' and try again.'],
-      metamask: ['MetaMask cannot send transactions to Testnet Bradbury\'s RPC yet (the RPC rejects its ' +
-        'requests). Use Rabby, or ', 'key', ' instead.']
+      internal: ['The wallet returned an internal error. Check for GEN at ', 'faucet', ' and try again, or ',
+        'key', ' instead.'],
+      metamask: ['If MetaMask still fails, set the Bradbury RPC to ' + wallet.WALLET_RPC +
+        ' in its network settings.']
     };
 
-    // The MetaMask notice above ATTEST WALLET, made on first use. The button
-    // stays usable: the notice warns, it does not block.
+    // The MetaMask notice above ATTEST WALLET, made on first use and shown
+    // only after MetaMask failed with -32700 or an internal error: a
+    // MetaMask that added the chain from here is on the gateway's /rpc and
+    // works, one that had it on the Bradbury RPC is told how to switch.
     var metaMaskNote = null;
 
     function metaMaskNotice() {
@@ -933,7 +936,7 @@
       show($('keyField'), !paying);
       show($('modeField'), !paying);
       $('attestT').textContent = paying ? 'ATTEST ' + DOT + ' WALLET' : 'ATTEST';
-      show(metaMaskNotice(), idle && paying && wallet.isMetaMask());
+      show(metaMaskNotice(), idle && paying && state.metaMaskFailed && wallet.isMetaMask());
       show($('resumeBox'), idle && state.resumeOpen);
       $('resumeLink').setAttribute('aria-expanded', String(state.resumeOpen));
       $('tabFile').setAttribute('aria-selected', String(tab === 'file'));
@@ -1496,6 +1499,7 @@
       }
       var from = state.walletAddr;
       state.busy = true;
+      state.metaMaskFailed = false;
       setMsg('Cutting the signed headers');
       render();
       inputBytes().then(function (bytes) {
@@ -1545,9 +1549,10 @@
         if (!state.wtx) {
           if (error && error.help) {
             setHelp(error.help);
-          } else if (wallet.isInternalError(error)) {
+          } else if (wallet.isRpcIdError(error) || wallet.isInternalError(error)) {
             // The wallet's own words say nothing; they stay in the console.
             console.error('attest_inline: the wallet returned an internal error', error);
+            state.metaMaskFailed = true;
             setHelp('internal');
           } else {
             setMsg(error instanceof window.LacreDkim.BlobError ? error.message : walletError(error), true);

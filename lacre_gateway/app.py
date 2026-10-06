@@ -23,8 +23,11 @@ POST /access-request takes no key either, since whoever uses it has none;
 it is rate limited per address and stores only what the form asks for.
 GET /primitives takes none: it answers which contracts the Router names,
 which is public chain state, from a copy at most ten minutes old.
+POST /rpc takes none: it forwards to the public Bradbury RPC with the
+request ids renumbered, for wallets whose ids that RPC refuses (rpcproxy.py).
 """
 
+import contextlib
 import datetime
 import hashlib
 import hmac
@@ -47,6 +50,7 @@ from .blobs import BODY, BlobStore
 from .chainio import ChainUnavailable
 from .config import EXTRACT_MODES
 from .contracts import LANES, confirm_after, sender_state
+from .rpcproxy import RpcProxy
 from .store import OPEN, InsufficientCredits, TopUpConflict
 from .topups import ManualTopUp
 from .vendor import attest
@@ -257,7 +261,7 @@ def access_view(row):
 
 
 def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodies=None,
-               web_dir=WEB_DIR):
+               web_dir=WEB_DIR, rpc_transport=None):
     import time
 
     clock = clock or time.time
@@ -265,6 +269,7 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
     accounts.bootstrap(store, settings.api_keys, settings.bootstrap_credits)
     manual = ManualTopUp(store)
     access_limit = RateLimit(clock)
+    rpc_proxy = RpcProxy(clock, transport=rpc_transport)
 
     def in_process(ctx):
         # McpEndpoint has checked this key; the API checks it again on every
@@ -288,8 +293,14 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
         max_request_body_size=2 * settings.max_eml_bytes + 65536)
     session_manager = mcp.session_manager
 
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        async with session_manager.run():
+            yield
+        await rpc_proxy.aclose()
+
     app = FastAPI(title="Lacre gateway", docs_url=None, redoc_url=None, openapi_url=None,
-                  lifespan=lambda app: session_manager.run())
+                  lifespan=lifespan)
     endpoint = McpEndpoint(store, session_manager)
     # Both spellings are routed so that neither is answered with a redirect,
     # which some MCP clients do not follow on POST.
@@ -842,6 +853,14 @@ def create_app(settings, store, blobs, contracts, worker=None, clock=None, bodie
             body, left = primitives_copy["body"], primitives_copy["until"] - now
         return JSONResponse(content=body, headers={
             "Cache-Control": "public, max-age=%d" % (max(0, int(left)),)})
+
+    @app.post("/rpc")
+    async def post_rpc(request: Request):
+        return await rpc_proxy.handle(request)
+
+    @app.options("/rpc")
+    def options_rpc():
+        return rpc_proxy.preflight()
 
     @app.get("/h/{token}")
     def served_headers(token: str):
